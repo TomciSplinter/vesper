@@ -1,0 +1,17 @@
+{
+  "testnet": true,
+  "chainId": 46630,
+  "chainName": "Robinhood Chain Testnet",
+  "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
+  "explorer": "https://explorer.testnet.chain.robinhood.com",
+  "pool": "0x0f52ed18CBCE672dcBb51dD2554Cc469054EE026",
+  "deployBlock": 140206364,
+  "assets": [
+    {
+      "address": "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112",
+      "symbol": "vTSLA",
+      "name": "vTSLA (test stand-in, not a real Robinhood token)"
+    }
+  ],
+  "relayers": []
+}

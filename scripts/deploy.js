@@ -1,0 +1,72 @@
+// Deploys Vesper to the network passed with --network.
+//   ASSETS="0xTokenA:1000,0xTokenB:500" npx hardhat run scripts/deploy.js --network robinhoodTestnet
+// Each asset is "address:maxDepositPerTx" in whole tokens (18 decimals).
+//
+// Uses the Groth16Verifier generated from build/transaction2.zkey. That key is a
+// DEV key until you run a real ceremony. Do not deploy it to mainnet.
+const { ethers, network } = require("hardhat");
+const { poseidonContract } = require("circomlibjs");
+const { MERKLE_TREE_HEIGHT } = require("../src/constants");
+
+async function main() {
+  const [deployer] = await ethers.getSigners();
+  if (network.name === "robinhood" && process.env.I_RAN_THE_CEREMONY !== "yes") {
+    throw new Error("Refusing mainnet deploy with a dev proving key. Run the ceremony, regenerate Verifier.sol, then set I_RAN_THE_CEREMONY=yes.");
+  }
+  console.log(`Deploying to ${network.name} from ${deployer.address}`);
+
+  const hasher = await new ethers.ContractFactory(poseidonContract.generateABI(2), poseidonContract.createCode(2), deployer).deploy();
+  await hasher.waitForDeployment();
+  const verifier = await ethers.deployContract("Groth16Verifier");
+  await verifier.waitForDeployment();
+  const pool = await ethers.deployContract("VesperPool", [
+    await verifier.getAddress(),
+    await hasher.getAddress(),
+    MERKLE_TREE_HEIGHT,
+    deployer.address,
+  ]);
+  await pool.waitForDeployment();
+
+  const assets = (process.env.ASSETS || "").split(",").filter(Boolean);
+
+  // Testnet only: MOCK_TOKEN="SYMBOL:maxDeposit" deploys a stand-in stock token,
+  // mints some to the deployer and enables it in the pool.
+  let mockToken;
+  if (process.env.MOCK_TOKEN) {
+    if (network.name === "robinhood") throw new Error("MOCK_TOKEN is for testnets only.");
+    const [symbol, max] = process.env.MOCK_TOKEN.split(":");
+    mockToken = await ethers.deployContract("MockStockToken", [`${symbol} Test Stock Token`, symbol]);
+    await mockToken.waitForDeployment();
+    await (await mockToken.mint(deployer.address, ethers.parseEther("10000"))).wait();
+    console.log(`  mock ${symbol} at ${await mockToken.getAddress()} (10000 minted to deployer)`);
+    assets.push(`${await mockToken.getAddress()}:${max || "1000"}`);
+  }
+
+  for (const entry of assets) {
+    const [asset, max] = entry.split(":");
+    await (await pool.configureAsset(asset, true, ethers.parseEther(max))).wait();
+    console.log(`  enabled ${asset} (max ${max} per deposit)`);
+  }
+
+  const deployment = {
+    network: network.name,
+    chainId: Number((await ethers.provider.getNetwork()).chainId),
+    deployer: deployer.address,
+    deployBlock: await ethers.provider.getBlockNumber(),
+    hasher: await hasher.getAddress(),
+    verifier: await verifier.getAddress(),
+    pool: await pool.getAddress(),
+    mockToken: mockToken ? await mockToken.getAddress() : undefined,
+    assets,
+  };
+  const out = require("path").join(__dirname, "..", "deployments", `${network.name}.json`);
+  require("fs").mkdirSync(require("path").dirname(out), { recursive: true });
+  require("fs").writeFileSync(out, JSON.stringify(deployment, null, 2));
+  console.log(deployment);
+  console.log(`Saved to ${out}`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

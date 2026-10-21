@@ -1,0 +1,33 @@
+{
+  "name": "vesper-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vesper: a shielded pool for tokenized stocks on Robinhood Chain",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build:circuit": "bash scripts/build-circuit.sh",
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "build": "npm run build:circuit && npm run compile",
+    "relayer": "node relayer/index.js",
+    "webapp:build": "node webapp/build.mjs",
+    "webapp:e2e": "node webapp/e2e/run.mjs"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
+    "ethers": "^6.13.4",
+    "snarkjs": "^0.7.5",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.1.0",
+    "buffer": "^6.0.3",
+    "esbuild": "^0.24.2",
+    "hardhat": "^2.22.17",
+    "playwright": "^1.56.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
