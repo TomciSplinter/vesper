@@ -34,7 +34,13 @@ const KEYS = [
 ];
 
 const children = [];
-const cleanup = () => children.forEach((c) => c.kill("SIGTERM"));
+// Children run in their own process group so the whole tree (npx -> hardhat) is stopped.
+const cleanup = () =>
+  children.forEach((c) => {
+    try {
+      process.kill(-c.pid, "SIGTERM");
+    } catch {}
+  });
 process.on("exit", cleanup);
 
 function check(cond, msg) {
@@ -71,7 +77,7 @@ async function main() {
   await initPoseidon();
 
   console.log("Starting local chain…");
-  const node = spawn("npx", ["hardhat", "node", "--port", "8545"], { cwd: root, stdio: "ignore" });
+  const node = spawn("npx", ["hardhat", "node", "--port", "8545"], { cwd: root, stdio: "ignore", detached: true });
   children.push(node);
   await waitForRpc();
 

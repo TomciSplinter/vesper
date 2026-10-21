@@ -58,10 +58,16 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 - New testnet pool (old one abandoned, it only held fake vTSLA): pool `0x163BDa760077E965beB13570222C2267aD2A3957`, verifier `0xFe115B3301bb0d4c66201c4202756A1a66de81bC`, hasher `0x92648D1f63fe3317065CC0c8b3694e2855d3DB42`, deploy block 140247715. Same vTSLA token `0xF9A6…F112`. Old pool was `0x0f52ed18CBCE672dcBb51dD2554Cc469054EE026`.
 - Verified: 30/30 Hardhat tests (including a view key watching a spend), 18/18 browser checks (read-only shows the real 44, not 262.5), live smoke test on the new pool, and the live app check including a view key showing the owner's exact balance.
 
+## Relayer on Vercel (21 Oct 2026)
+- `api/info.js`, `api/relay.js`, `api/jobs/[id].js` → `relayer/serverless.js` → the same `Relayer` checks. Stateless: `submitNow` sends straight away and returns the tx hash as the job id; `txStatus` reads the receipt. `vercel.json` now installs production deps (`npm ci --omit=dev --ignore-scripts`) so the functions have `ethers`; the static app is still served pre-built from `webapp/dist`.
+- Env vars are set in Vercel only: `RELAYER_KEY` (testnet relayer wallet `0x6aEB684fB1F8611E46379BAd32FBacf1EC10d912`), `RPC_URL`, `CHAIN_ID=46630`, `POOL`, `RELAYER_FEES` (vTSLA 0.1).
+- Tests: `test/serverless.test.js` (4). A late double-spend found by simulation now reports 409 "note already spent".
+- Serverless limits: no shared memory, so no cross-request rate limit or in-flight note lock (two simultaneous requests for the same note can both be sent and the second reverts on-chain, costing the relayer gas), and simultaneous sends can collide on nonce (one fails; the user retries). Fine for testnet; before mainnet use a single long-running relayer (`npm run relayer`) or add a shared store (e.g. Vercel KV) for nonces and locks. Keep the relayer wallet topped up; each relay costs ~0.0000116 ETH at testnet gas prices.
+
 ## Next steps
 1. ~~`npm install`, install circom, `npm run build`, `npm test`; fix whatever fails.~~ Done.
 2. Deploy to Robinhood Chain testnet with a real stock token address.
-3. ~~Relayer service~~ and ~~web app~~ v0.1 done (see above). Web app hosted on Vercel at vesper.markets. ~~View-key spent-status gap~~ fixed. Next: host a relayer publicly. Relayer hardening before mainnet: price-feed fees, persistent jobs, run it on a real server, several operators.
+3. ~~Relayer service~~ and ~~web app~~ v0.1 done (see above). Web app hosted on Vercel at vesper.markets. ~~View-key spent-status gap~~ fixed. Relayer runs as Vercel functions at vesper.markets/api (see below). Relayer hardening before mainnet: price-feed fees, persistent jobs, run it on a real server, several operators.
 4. Compliance: association-set proofs (Privacy Pools style).
 5. Trusted-setup ceremony with outside contributors, ZK audit, legal review (private holdings of tokenized securities), then mainnet with small deposit caps. Token launch last.
 

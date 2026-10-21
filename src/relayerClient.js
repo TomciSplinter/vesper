@@ -9,6 +9,10 @@ function serializeRelayRequest({ args, extData }, asset) {
   };
 }
 
+// Joins onto the relayer's base URL, keeping its path ("/api" + "/info" -> "/api/info").
+// Works with absolute URLs and, in a browser, with same-site paths like "/api".
+const endpoint = (base, p) => String(base).replace(/\/+$/, "") + p;
+
 async function call(url, opts) {
   const res = await fetch(url, opts);
   const body = await res.json().catch(() => ({}));
@@ -18,7 +22,7 @@ async function call(url, opts) {
 
 /** { relayer, pool, chainId, minFees: { asset: rawFee } } */
 async function getRelayerInfo(relayerUrl) {
-  return call(new URL("/info", relayerUrl));
+  return call(endpoint(relayerUrl, "/info"));
 }
 
 /**
@@ -26,14 +30,14 @@ async function getRelayerInfo(relayerUrl) {
  * Resolves with the final job ({ status: "confirmed", txHash }) or throws.
  */
 async function relayTransaction(relayerUrl, prepared, asset, { pollMs = 1000, timeoutMs = 300_000 } = {}) {
-  const { id } = await call(new URL("/relay", relayerUrl), {
+  const { id } = await call(endpoint(relayerUrl, "/relay"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(serializeRelayRequest(prepared, asset)),
   });
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const job = await call(new URL(`/jobs/${id}`, relayerUrl));
+    const job = await call(endpoint(relayerUrl, `/jobs/${id}`));
     if (job.status === "confirmed") return { id, ...job };
     if (job.status === "failed") throw new Error(`relayer: transaction failed (${job.error || "reverted"})`);
     await new Promise((r) => setTimeout(r, pollMs));

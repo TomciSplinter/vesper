@@ -85,6 +85,8 @@ npm run relayer
 
 In code: `getRelayerInfo(url)` then `relayTransaction(url, prepared, asset)` (in `src/`).
 
+**On Vercel (how vesper.markets runs it):** the same relayer also runs as serverless functions in `api/` (`/api/info`, `/api/relay`, `/api/jobs/:txHash`), set up by `relayer/serverless.js`. Each request is checked, simulated and sent right away; the job id is the transaction hash, and status is read back from the chain, so nothing has to survive between requests. Set `RELAYER_KEY`, `RPC_URL`, `CHAIN_ID`, `POOL` and `RELAYER_FEES` in the Vercel project's environment variables (never in the repo). Without them the functions answer 503 "relayer not configured". The app's config uses `"relayers": ["/api"]`.
+
 Before it pays any gas, the relayer checks the fee, its own address, the asset, the root, the nullifiers and the extData hash, then simulates the transaction. Bad requests are turned away for free. It relays withdrawals and private transfers, not deposits (a deposit has to come from the wallet holding the tokens). It doesn't log IPs or request bodies; users who want to hide their IP from the operator should still connect over Tor or a VPN.
 
 v0.1 limits: fees are fixed per asset (no price feed yet), job status lives in memory, there's one wallet with one transaction queue, and there's no relayer registry, so the web app must be given relayer URLs.

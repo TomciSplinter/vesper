@@ -13,5 +13,7 @@
       "name": "vTSLA (test stand-in, not a real Robinhood token)"
     }
   ],
-  "relayers": []
+  "relayers": [
+    "/api"
+  ]
 }

@@ -100,7 +100,10 @@ class Relayer {
     try {
       await this.pool.transact.staticCall(args, extData, asset);
     } catch (err) {
-      throw new RelayError(`transaction would fail: ${revertName(this.pool, err)}`);
+      const reason = revertName(this.pool, err);
+      // Can happen if the same note landed on-chain between the reads above and this simulation.
+      if (reason === "NullifierAlreadySpent") throw new RelayError("note already spent", 409);
+      throw new RelayError(`transaction would fail: ${reason}`);
     }
     return { args, extData, asset };
   }
@@ -138,6 +141,31 @@ class Relayer {
       for (const n of args.inputNullifiers) this.pendingNullifiers.delete(n);
     }
     return job;
+  }
+
+  /**
+   * Stateless mode (serverless): check, send right away, and use the transaction
+   * hash as the job id. Status is then read from the chain with txStatus(), so
+   * nothing has to survive between requests.
+   */
+  async submitNow(body) {
+    const { args, extData, asset } = await this.check(body);
+    try {
+      const sent = await this.pool.transact(args, extData, asset);
+      return { id: sent.hash };
+    } catch (err) {
+      throw new RelayError(`couldn't send: ${revertName(this.pool, err)}`, 502);
+    }
+  }
+
+  /** Job status for a transaction hash, read from the chain. */
+  async txStatus(hash) {
+    if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) return null;
+    const provider = this.signer.provider;
+    const receipt = await provider.getTransactionReceipt(hash);
+    if (receipt) return { status: receipt.status === 1 ? "confirmed" : "failed", txHash: hash, gasUsed: receipt.gasUsed.toString() };
+    const tx = await provider.getTransaction(hash);
+    return tx ? { status: "sent", txHash: hash } : null;
   }
 
   job(id) {
