@@ -70,7 +70,7 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 
 ## Compliance: association sets (21 Oct 2026)
 - Circuit (17,740 constraints, 11 public inputs: root, publicAmount, extDataHash, asset, newLabel, aspRoot, exitLabel, 2 nullifiers, 2 commitments): notes are `Poseidon(amount, pubkey, blinding, asset, label)`. Deposits get a pool-assigned `newLabel` and may not spend notes (`newLabel * sumIns === 0`); other txs keep the inputs' label. Payouts prove `label ∈ aspRoot` tree (depth 20) or `exitLabel == label`.
-- VesperPool: `nextDepositLabel(depositor)` (keccak of chain, pool, depositor, nonce), `depositorOf(label)`, `NewDeposit` event, `updateAssociationSet(root, labels, uri)` by `aspPostman` (current + previous root accepted), `complianceRequired` (default on). Any payout (extAmount < 0 or fee > 0) needs an accepted aspRoot, or an exit: no fee, recipient = depositor. Transfers with no fee need neither.
+- VesperPool: `nextDepositLabel(depositor)` (keccak of chain, pool, depositor, nonce), `depositorOf(label)`, `NewDeposit` event, `updateAssociationSet(root, labels, uri)` by `aspPostman` (current + previous root accepted; superseded by the self-audit: changes only, 7-day grace), `complianceRequired` (default on). Any payout (extAmount < 0 or fee > 0) needs an accepted aspRoot, or an exit: no fee, recipient = depositor. Transfers with no fee need neither.
 - Client: `Utxo.label`; `prepareTransaction({ depositor, asp, exit })`; `fetchAssociationSet` rebuilds the list from the latest event and checks it against the on-chain root; `selectNotes` keeps to one label; `NotApprovedError`. `src/asp.js` (fetchDeposits, approvedLabels, associationTree), `relayer/aspUpdate.js`, `scripts/asp-update.js`, `api/asp-update.js`.
 - Fixed along the way: event lookups used ethers' cached block number and could miss a tx that had just landed (`src/events.js` now asks up to "latest").
 - Web app: "N waiting for approval" per stock; withdrawals use approved money only; "Return to depositing wallet" for the rest; relayed sends need approved money.
@@ -87,6 +87,12 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 - Relayer fees now default from `deployments/robinhoodTestnet.json` → `relayerFees` (TSLA 0.01, vTSLA 0.1); the `RELAYER_FEES` env var is optional and overrides per asset.
 
 - **Live with real Robinhood test stock (21 Oct 2026):** the founder claimed TSLA from the official faucet, deposited 3 TSLA from a phone (tx `0x814e80…a3d`), then withdrew 1 TSLA through the Vercel relayer to `0xE345…aa03` (tx `0xccfa5e…5446`, sent by the relayer, with proof of approval, 0.01 TSLA fee). Pool holds 1.99 TSLA.
+
+## Self-audit (22 Oct 2026)
+- See `audit/README.md` (summary, admin-powers table), `audit/findings.md` (F1–F11, S1–S4 with fixes), `audit/tools.md` (Slither, circomspect, circom --inspect; Picus not installable here). An independent reviewer that did not write the code found no break in the core cryptography but 11 issues around it; 7 fixed, 3 mitigated, 5 accepted and documented. The circuit is unchanged, so the zkey and any ceremony on it stay valid.
+- Contract changes: every historical tree root stays valid; payouts still work on a full tree (`TreeFull` for anything else); deposits can't pay fees; `updateAssociationSet(root, added, removed, uri)` with a 7-day grace for replaced roots (`ASP_GRACE`, `aspRootReplacedAt`, no more `previousAspRoot`); 3-day `ADMIN_DELAY` via `scheduleChange`/`executeChange`/`cancelChange` for `applyAssetConfig`/`applyGuardian`/`applyAspPostman`/`applyComplianceRequired`; instant `restrictAsset` and pause; initial assets + postman in the constructor (`ASP_POSTMAN` env in deploy.js); mainnet guard by chain id 4663.
+- Client/app: spent checks are local (NewNullifier events); association set replayed from diffs, `forLabel` finds still-valid older sets; notes show approved / "withdraw by <date>" / waiting; relayer-sponsored exits (`sponsorExits` in the deployment file); `maxRelayerFees` cap in the app config; EIP-712 sign-in bound to chain id (new accounts) with a warning if a wallet's account changes; privacy note on Send.
+- Tests: 66 Hardhat (new `test/admin.test.js`, `test/selfaudit.test.js`) + 23 browser checks.
 
 ## Next steps
 1. ~~`npm install`, install circom, `npm run build`, `npm test`; fix whatever fails.~~ Done.

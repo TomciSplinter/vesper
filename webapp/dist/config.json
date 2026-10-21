@@ -1,27 +1,25 @@
 {
   "testnet": true,
-  "chainId": 46630,
-  "chainName": "Robinhood Chain Testnet",
-  "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
-  "explorer": "https://explorer.testnet.chain.robinhood.com",
-  "pool": "0x0c350E68C861b01E4Ac7bbf895C3e0f0e8b7f424",
-  "deployBlock": 140286311,
+  "chainId": 31337,
+  "chainName": "Local test chain",
+  "rpcUrl": "http://127.0.0.1:8545",
+  "explorer": "",
+  "pool": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+  "deployBlock": 5,
   "assets": [
     {
-      "address": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
-      "symbol": "TSLA",
-      "name": "Tesla (Robinhood testnet Stock Token)"
-    },
-    {
-      "address": "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112",
+      "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
       "symbol": "vTSLA",
-      "name": "vTSLA (Vesper test stand-in)"
+      "name": "vTSLA test token"
     }
   ],
   "relayers": [
-    "/api"
+    "http://127.0.0.1:8788"
   ],
-  "aspUpdateUrl": "/api/asp-update",
+  "maxRelayerFees": {
+    "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0": "1"
+  },
+  "aspUpdateUrl": "http://127.0.0.1:8789/asp-update",
   "wasmUrl": "circuit/transaction2-38b593580b26.wasm",
   "zkeyUrl": "circuit/transaction2-38b593580b26.zkey"
 }

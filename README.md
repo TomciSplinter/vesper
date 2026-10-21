@@ -2,7 +2,7 @@
 
 A shielded pool for tokenized stocks on Robinhood Chain. Deposit Stock Tokens, hold and send them privately inside the pool, and withdraw with a zero-knowledge proof. A view key lets you show your holdings to an accountant or auditor without giving up the ability to spend.
 
-> **Status: v0.1, unaudited, not yet compiled in CI.** The proving key built by `npm run build:circuit` is a single-machine DEV key. Anyone who knows its randomness can forge proofs. Testnet only until the ceremony and audit are done.
+> **Status: v0.1, self-audited (findings and fixes in [`audit/`](audit/README.md)), not externally audited.** The proving key built by `npm run build:circuit` is a single-machine DEV key. Anyone who knows its randomness can forge proofs. Testnet only until the ceremony and audit are done.
 
 ## How it works
 
@@ -41,7 +41,7 @@ Vesper follows the Privacy Pools approach, adapted to private transfers:
 
 - **Every deposit gets a label** chosen by the pool, recorded with the depositing wallet. The label is part of every note and **follows the money**: notes created from it, including ones you send to someone else, carry the same label. A deposit can't also spend notes, so new money can't borrow an old label.
 - **A screener (the "ASP") publishes the association set**: the Merkle root of approved labels, plus the list itself so wallets can rebuild and check it. v0.1 policy: approve every deposit except from addresses in `asp/blocklist.json` (`MIN_AGE_SECONDS` can add a waiting period). On testnet the web app asks `/api/asp-update` to run right after a deposit.
-- **Anything that pays out of the pool** (a withdrawal, or any relayer fee) must prove, in zero knowledge, that its label is in the current or previous association set, without revealing which label.
+- **Anything that pays out of the pool** (a withdrawal, or any relayer fee) must prove, in zero knowledge, that its label is in the current association set (or one replaced less than 7 days ago), without revealing which label. The set is published as changes only (`updateAssociationSet(root, added, removed, uri)`), and wallets rebuild and check it.
 - **Unapproved money is never stuck**: it can always be **returned to the wallet that deposited it** ("exit"). That's public, has no fee, and can't go anywhere else. Private sends without a fee are still allowed, so a recipient can receive unapproved money; it stays unapproved and can only exit to the original depositor.
 - The owner can turn `complianceRequired` off (then payouts don't need a proof), and sets the `aspPostman` that publishes the list.
 
@@ -124,10 +124,19 @@ Host `webapp/dist/` on any static host (Vercel, Netlify, Cloudflare Pages, GitHu
 
 ## Safety design
 
-- **Not upgradeable.** Verifier and hasher are fixed at deploy.
-- **Admin can't touch funds.** The owner can allowlist assets, cap deposit size and require compliance; the guardian can pause new deposits. Nobody can stop you getting your money back: unapproved money can always exit to the wallet that deposited it.
+- **Not upgradeable.** The verifier and hasher are fixed at deploy.
+- **Nobody can move or freeze user funds.** Approved money can always be withdrawn privately. Unapproved money can always be returned to the wallet that deposited it. Even a completely full note tree still pays out.
+- **Admin changes come with notice.** Enabling a stock, raising a cap, changing the guardian or approval publisher, and switching compliance on or off all wait **3 days** after being announced on-chain. Pausing deposits, lowering a cap or disabling a stock are instant, because they only restrict new deposits. Details are in `audit/README.md`.
+- **The approval publisher is trusted for compliance.** It decides which deposits are approved. Removing a deposit takes effect after a **7-day grace period**, during which its holders can still withdraw privately. After that, that deposit's money, including money sent on to others, can only go back to the original depositor.
 - **Per-asset deposit caps** keep risk small while the pool is young.
 - **Fee-on-transfer tokens are rejected** so the pool's balance always matches its notes.
+- **Stock Tokens themselves** are upgradeable and pausable by their issuer, and Robinhood Chain screens addresses. Vesper can't override that.
+
+## Privacy: what others can see
+
+- **Everyone sees** deposits (wallet and amount) and withdrawals (recipient and amount). They don't see which deposit a withdrawal or a private send came from.
+- **The person you pay privately** can see which public wallet first deposited that money, and how much it deposited. This comes with compliance labels that follow the money (audit F6).
+- **The relayer and the RPC** see your IP, unless you use a VPN or Tor. The wallet checks which notes are spent locally, so the RPC can't link your notes to you that way.
 
 ## Before mainnet
 
