@@ -34,15 +34,19 @@ function relayerFromEnv(env = process.env) {
   const chainId = Number(v.CHAIN_ID);
   if (!Number.isInteger(chainId) || chainId <= 0) throw bad("CHAIN_ID", "must be a number like 46630");
   if (!ethers.isAddress(v.POOL)) throw bad("POOL", "must be a 0x address");
+  // "0xToken:0.1,0xOther:0.2". Also accepts a decimal comma ("0,1"), any separator
+  // between address and fee (":", space, "=", a look-alike colon) and ";" between entries.
   const minFees = {};
-  for (const entry of v.RELAYER_FEES.split(",").map((x) => x.trim()).filter(Boolean)) {
-    const [asset, fee] = entry.split(":").map((x) => (x || "").trim());
-    if (!ethers.isAddress(asset)) throw bad("RELAYER_FEES", "needs entries like 0xTokenAddress:0.1");
+  const entry = /(0x[0-9a-fA-F]{40})[^0-9a-zA-Z]*?([0-9]+(?:[.,][0-9]+)?)(?![0-9a-fA-Fx])/g;
+  for (const [, asset, fee] of v.RELAYER_FEES.matchAll(entry)) {
     try {
-      minFees[ethers.getAddress(asset)] = ethers.parseEther(fee);
+      minFees[ethers.getAddress(asset)] = ethers.parseEther(fee.replace(",", "."));
     } catch {
       throw bad("RELAYER_FEES", "fee must be a number, like 0xTokenAddress:0.1");
     }
+  }
+  if (/0x[0-9a-fA-F]{40}/.test(v.RELAYER_FEES) && !Object.keys(minFees).length) {
+    throw bad("RELAYER_FEES", "fee must be a number, like 0xTokenAddress:0.1");
   }
   if (!Object.keys(minFees).length) throw bad("RELAYER_FEES", "needs at least one 0xTokenAddress:fee");
 
