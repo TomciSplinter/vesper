@@ -67,7 +67,8 @@ async function scanNotes(pool, keypair, { includeSpent = false, fromBlock = 0 } 
   for (const c of commitments) {
     const utxo = Utxo.decrypt(keypair, c.encryptedOutput, c.index, c.commitment);
     if (!utxo || utxo.amount === 0n) continue;
-    if (!includeSpent && keypair.privkey !== null) {
+    // Needs the nullifier key, which spend keys and (new-style) view keys both have.
+    if (!includeSpent && keypair.nk) {
       if (await pool.isSpent(toBytes32(utxo.getNullifier()))) continue;
     }
     notes.push(utxo);
@@ -96,6 +97,9 @@ async function prepareTransaction({
 }) {
   if (inputs.length > 2 || outputs.length > 2) throw new Error("max 2 inputs and 2 outputs; merge notes first");
   const assetField = BigInt(asset);
+  for (const u of inputs) {
+    if (u.amount > 0n && !u.keypair.canSpend) throw new Error("this keypair can't spend");
+  }
   for (const u of [...inputs, ...outputs]) {
     if (u.asset !== assetField) throw new Error("all notes in a transaction must be the same asset");
   }

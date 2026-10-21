@@ -264,7 +264,9 @@ async function main() {
   await page.waitForSelector('[data-testid="private-vTSLA"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="refresh"]')?.textContent === "Refresh");
   check((await page.$('[data-testid="tab-send"]')) === null, "view key opens read-only (no send/withdraw)");
-  check(/Notes received/.test(await page.textContent("main")), "read-only mode labels notes as received, not balance");
+  await page.waitForFunction(() => /= 88 shares/.test(document.querySelector('[data-testid="balance-vTSLA"]').textContent));
+  check((await privateBalance()) === e(44), "view key shows the REAL private balance (44), with spent notes excluded");
+  check(/read-only/.test(await page.textContent("main")), "read-only mode is labelled");
   check(!/wallet \d/.test(await page.textContent('[data-testid="balance-vTSLA"]')), "read-only mode doesn't show the connected wallet's balance");
   await page.screenshot({ path: path.join(shots, "5-viewkey.png") });
 

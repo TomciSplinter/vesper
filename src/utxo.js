@@ -27,8 +27,7 @@ class Utxo {
   getNullifier() {
     if (this.amount > 0n && this.index === null) throw new Error("can't spend a note before it's in the tree");
     const path = this.index === null ? 0n : BigInt(this.index);
-    const signature = this.keypair.sign(this.getCommitment(), path);
-    return poseidonHash([this.getCommitment(), path, signature]);
+    return this.keypair.nullifier(this.getCommitment(), path);
   }
 
   /** amount(32) | blinding(32) | asset(20), encrypted to the note owner. */

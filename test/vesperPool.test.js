@@ -101,12 +101,29 @@ describe("VesperPool", function () {
       expect(left.map((n) => n.amount)).to.deep.equal([e(60)]);
     });
 
-    it("a view key sees notes but cannot spend them", async function () {
+    it("a view key sees the real balance (spends included) but cannot spend", async function () {
       const ctx = await loadFixture(withAliceDeposit);
-      const viewer = Keypair.fromViewKey(ctx.aliceKp.pubkey, ctx.aliceKp.viewKey());
+      const viewer = Keypair.fromExportedViewKey(ctx.aliceKp.exportViewKey());
       const seen = await scanNotes(ctx.pool, viewer);
       expect(seen.map((n) => n.amount)).to.deep.equal([e(100)]);
-      expect(() => seen[0].getNullifier()).to.throw("can't spend");
+
+      // The viewer can't build a spend.
+      await expect(
+        prepareTransaction({ pool: ctx.pool, asset: ctx.tslaAddr, chainId: ctx.chainId, tree: await buildTree(ctx.pool), inputs: [seen[0]], recipient: ctx.carol.address })
+      ).to.be.rejectedWith("can't spend");
+
+      // Alice spends 100 into 40 to Bob + 60 change; the viewer sees exactly 60 left.
+      const [note] = await scanNotes(ctx.pool, ctx.aliceKp);
+      await transact(ctx, ctx.alice, {
+        asset: ctx.tslaAddr,
+        inputs: [note],
+        outputs: [
+          new Utxo({ amount: e(40), keypair: Keypair.fromAddress(ctx.bobKp.address()), asset: ctx.tslaAddr }),
+          new Utxo({ amount: e(60), keypair: ctx.aliceKp, asset: ctx.tslaAddr }),
+        ],
+      });
+      expect((await scanNotes(ctx.pool, viewer)).map((n) => n.amount)).to.deep.equal([e(60)]);
+      expect((await scanNotes(ctx.pool, viewer, { includeSpent: true })).map((n) => n.amount)).to.deep.equal([e(100), e(60)]);
     });
   });
 

@@ -23,7 +23,10 @@ New notes are encrypted to their owner (X25519 + XSalsa20-Poly1305) and emitted 
 ### Keys
 
 - **Spend key**: spends notes. Never leaves the user's device.
-- **View key**: decrypts notes, can't spend. Give it to whoever needs to see your holdings.
+- **Nullifier key**: derived from the spend key. It computes each note's nullifier, so it can tell which notes have been spent, but it can't spend.
+- **View key** = decryption key + nullifier key. It shows your real current balance and history, but can't spend. Give it to whoever needs to see your holdings.
+
+`nullifier = Poseidon(commitment, leafIndex, nk)` with `nk = Poseidon(spendKey, NK_DOMAIN)` (Zcash-style). Spending still requires the spend key to open the note's public key inside the proof.
 - **Vesper address**: share it to get paid privately.
 
 ### Stock Token specifics
@@ -101,7 +104,7 @@ Host `webapp/dist/` on any static host (Vercel, Netlify, Cloudflare Pages, GitHu
 - **Account**: the wallet signs one fixed message; that signature derives the Vesper spend key. The same wallet always gets the same account, so there's no extra seed to back up. The key lives only in page memory (sign again after reload).
 - **Config** (`config.json` next to the app): `chainId`, `chainName`, `rpcUrl`, `explorer`, `pool`, `deployBlock`, `assets[{address, symbol}]`, `relayers[urls]`, `testnet`.
 - **Size**: about 3.4 MB of JavaScript plus the 8.5 MB proving key, which loads the first time someone makes a proof.
-- **View key mode**: paste a `vview:…` key to see an account's notes read-only.
+- **View key mode**: paste a `vview:…` key to see an account's real balance read-only.
 
 ## Safety design
 
@@ -121,4 +124,4 @@ Host `webapp/dist/` on any static host (Vercel, Netlify, Cloudflare Pages, GitHu
 
 ## Credit
 
-The note/nullifier design follows Tornado Cash Nova's audited 2-in/2-out pattern, extended with a per-note asset field so one pool holds many stocks.
+The note design follows Tornado Cash Nova's audited 2-in/2-out pattern, extended with a per-note asset field so one pool holds many stocks, and with a Zcash-style nullifier key in place of Nova's signature-based nullifier so view keys can see spends.

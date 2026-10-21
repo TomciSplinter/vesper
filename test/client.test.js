@@ -15,13 +15,15 @@ describe("Client helpers", function () {
     expect(a.address()).to.not.equal(other.address());
   });
 
-  it("an exported view key decrypts notes but can't spend", function () {
+  it("an exported view key decrypts notes and computes the owner's nullifiers, but can't spend", function () {
     const kp = new Keypair();
-    const note = new Utxo({ amount: 42n, keypair: kp, asset });
+    const note = new Utxo({ amount: 42n, keypair: kp, asset, index: 7 });
     const viewer = Keypair.fromExportedViewKey(kp.exportViewKey());
-    const seen = Utxo.decrypt(viewer, note.encrypt(), 0, note.getCommitment());
+    const seen = Utxo.decrypt(viewer, note.encrypt(), 7, note.getCommitment());
     expect(seen.amount).to.equal(42n);
-    expect(() => seen.getNullifier()).to.throw("can't spend");
+    expect(seen.getNullifier()).to.equal(note.getNullifier());
+    expect(viewer.canSpend).to.equal(false);
+    expect(viewer.privkey).to.equal(null);
     expect(() => Keypair.fromExportedViewKey("vview:xyz")).to.throw("bad view key");
   });
 

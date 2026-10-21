@@ -188,13 +188,13 @@ function Balances({ vesper, data, onRefresh, refreshing, wide }) {
   return (
     <section className="card">
       <div className="row between">
-        <h2>{vesper.viewOnly ? "Notes received" : "Private balance"}</h2>
+        <h2>{vesper.viewOnly ? "Private balance, read-only" : "Private balance"}</h2>
         <button className="btn ghost small" onClick={onRefresh} disabled={refreshing} data-testid="refresh">
           {refreshing ? "Scanning…" : "Refresh"}
         </button>
       </div>
       {vesper.viewOnly && (
-        <p className="note">Read-only. A view key shows every note this account has received, but it can't tell which ones have been spent, so this can be higher than the current balance.</p>
+        <p className="note" data-testid="readonly-note">You're viewing this account with a view key. You can see its balance but can't move anything.</p>
       )}
       {!data && <p className="muted">Scanning the pool for your notes…</p>}
       {data &&
@@ -309,8 +309,8 @@ function ViewKey({ vesper }) {
     <section className="card">
       <h2>View key</h2>
       <p className="muted">
-        Give this to an accountant or auditor. It lets them see the notes you've received, but they can't move anything. Anyone with it can see that
-        history, so only share it with people you trust.
+        Give this to an accountant or auditor. It shows them your private balance and history, but they can't move anything. Anyone with it can see
+        all of that, so only share it with people you trust.
       </p>
       {shown ? (
         <>

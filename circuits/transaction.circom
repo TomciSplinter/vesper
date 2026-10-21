@@ -11,7 +11,8 @@ Vesper shielded transaction: spend nIns notes, create nOuts notes, all of one as
 
 Note (UTXO) = { amount, pubkey, blinding, asset }
   commitment = Poseidon(amount, pubkey, blinding, asset)
-  nullifier  = Poseidon(commitment, merklePath, Poseidon(privKey, commitment, merklePath))
+  nk         = Poseidon(privKey, NK_DOMAIN)          (nullifier key, shared in the view key)
+  nullifier  = Poseidon(commitment, merklePath, nk)
 
 One circuit covers deposit, private transfer and withdrawal:
   sum(inputs) + publicAmount == sum(outputs)
@@ -46,7 +47,7 @@ template Transaction(levels, nIns, nOuts) {
     signal input outBlinding[nOuts];
 
     component inKeypair[nIns];
-    component inSignature[nIns];
+    component inNullifierKey[nIns];
     component inCommitmentHasher[nIns];
     component inNullifierHasher[nIns];
     component inTree[nIns];
@@ -63,15 +64,13 @@ template Transaction(levels, nIns, nOuts) {
         inCommitmentHasher[tx].inputs[2] <== inBlinding[tx];
         inCommitmentHasher[tx].inputs[3] <== asset;
 
-        inSignature[tx] = Signature();
-        inSignature[tx].privateKey <== inPrivateKey[tx];
-        inSignature[tx].commitment <== inCommitmentHasher[tx].out;
-        inSignature[tx].merklePath <== inPathIndices[tx];
+        inNullifierKey[tx] = NullifierKey();
+        inNullifierKey[tx].privateKey <== inPrivateKey[tx];
 
         inNullifierHasher[tx] = Poseidon(3);
         inNullifierHasher[tx].inputs[0] <== inCommitmentHasher[tx].out;
         inNullifierHasher[tx].inputs[1] <== inPathIndices[tx];
-        inNullifierHasher[tx].inputs[2] <== inSignature[tx].out;
+        inNullifierHasher[tx].inputs[2] <== inNullifierKey[tx].nk;
         inNullifierHasher[tx].out === inputNullifier[tx];
 
         inTree[tx] = MerkleProof(levels);
