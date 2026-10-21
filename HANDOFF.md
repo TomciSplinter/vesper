@@ -49,13 +49,19 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 - Tests: `test/client.test.js` (4). `webapp/e2e/run.mjs` is a full browser run on a local chain: unlock, deposit, relayed send, relayed withdraw, own-wallet withdraw, overspend error, split display, Receive, view-key read-only. **17/17 checks PASS.** `webapp/e2e/testnet-check.mjs` did a deposit plus a relayed withdrawal through the UI on the live testnet pool: **PASSED**.
 - Testnet RPC sends `access-control-allow-origin: *`, so a hosted app can call it directly.
 - Shipped `webapp/dist` points at the testnet pool with `relayers: []` (no public relayer yet), so send/withdraw default to the user's own wallet until a relayer URL is added to `config.json`.
-- **Protocol gap found: view keys can't see spends.** The nullifier needs the spend key, so a view-key holder sees every note received but not which were spent; read-only mode is labelled "Notes received" for this reason. Fix (circuit change, needs rebuild + redeploy): add a separate nullifier key (Zcash-style `nk`) that's included in the view key, so viewers can compute nullifiers without being able to spend.
+- View keys originally couldn't see spends (the nullifier needed the spend key). **Fixed the same day; see the next section.**
 - Other limits: proofs run on the page's main thread (a few seconds on desktop, slower on phones; move to a Web Worker); the key is in memory only; the whole chain history is rescanned on each refresh (add caching); the 3.4 MB bundle could be split.
+
+## Nullifier key: view keys see the real balance (21 Oct 2026)
+- Circuit: `nullifier = Poseidon(commitment, leafIndex, nk)` with `nk = Poseidon(spendKey, NK_DOMAIN)` and `NK_DOMAIN = keccak256("vesper-nullifier-key") mod p` (`circuits/keypair.circom`, `src/keypair.js`). This replaces Nova's signature-based nullifier. Spending still needs the spend key; `nk` only lets you compute nullifiers. 12,794 constraints.
+- View key format is now `vview:` + pubkey + decryption key + nk (3×32 bytes). Older 2-part view keys are rejected as "bad view key".
+- New testnet pool (old one abandoned, it only held fake vTSLA): pool `0x163BDa760077E965beB13570222C2267aD2A3957`, verifier `0xFe115B3301bb0d4c66201c4202756A1a66de81bC`, hasher `0x92648D1f63fe3317065CC0c8b3694e2855d3DB42`, deploy block 140247715. Same vTSLA token `0xF9A6…F112`. Old pool was `0x0f52ed18CBCE672dcBb51dD2554Cc469054EE026`.
+- Verified: 30/30 Hardhat tests (including a view key watching a spend), 18/18 browser checks (read-only shows the real 44, not 262.5), live smoke test on the new pool, and the live app check including a view key showing the owner's exact balance.
 
 ## Next steps
 1. ~~`npm install`, install circom, `npm run build`, `npm test`; fix whatever fails.~~ Done.
 2. Deploy to Robinhood Chain testnet with a real stock token address.
-3. ~~Relayer service~~ and ~~web app~~ v0.1 done (see above). Next: host the web app and a relayer publicly; fix the view-key spent-status gap. Relayer hardening before mainnet: price-feed fees, persistent jobs, run it on a real server, several operators.
+3. ~~Relayer service~~ and ~~web app~~ v0.1 done (see above). Web app hosted on Vercel at vesper.markets. ~~View-key spent-status gap~~ fixed. Next: host a relayer publicly. Relayer hardening before mainnet: price-feed fees, persistent jobs, run it on a real server, several operators.
 4. Compliance: association-set proofs (Privacy Pools style).
 5. Trusted-setup ceremony with outside contributors, ZK audit, legal review (private holdings of tokenized securities), then mainnet with small deposit caps. Token launch last.
 

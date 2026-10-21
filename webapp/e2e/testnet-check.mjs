@@ -133,6 +133,20 @@ async function main() {
   check((await provider.getTransactionCount(wallet.address)) === nonce, "user's wallet sent nothing for the withdrawal");
   await page.screenshot({ path: path.join(shots, "testnet-after.png") });
 
+  // View key on the live chain: read-only balance must equal the owner's real balance.
+  const ownerBalance = await priv();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.click('[data-testid="tab-viewkey"]');
+  await page.click('[data-testid="show-viewkey"]');
+  const viewKey = (await page.textContent('[data-testid="viewkey"]')).trim();
+  await page.click('[data-testid="lock"]');
+  await page.click("text=I have a view key");
+  await page.fill('[data-testid="viewkey-input"]', viewKey);
+  await page.click('[data-testid="open-viewkey"]');
+  await page.waitForSelector('[data-testid="readonly-note"]');
+  await page.waitForFunction(() => document.querySelector('[data-testid="refresh"]')?.textContent === "Refresh");
+  check((await priv()) === ownerBalance, `view key shows the same live balance as the owner (${ethers.formatEther(ownerBalance)})`);
+
   await browser.close();
   app.close();
   pass.close();
