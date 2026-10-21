@@ -16,6 +16,7 @@ const { ethers } = require("ethers");
 const { initPoseidon, Keypair, scanNotes } = require("../../src");
 const { Relayer } = require("../../relayer/relayer");
 const { createServer } = require("../../relayer/server");
+const { publishAssociationSet } = require("../../relayer/aspUpdate");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..", "..");
@@ -23,6 +24,7 @@ const shots = path.join(here, "screenshots");
 const RPC = "http://127.0.0.1:8545";
 const APP_PORT = 5173;
 const RELAYER_PORT = 8788;
+const ASP_PORT = 8789;
 const FEE = ethers.parseEther("0.5");
 const e = (n) => ethers.parseEther(String(n));
 
@@ -100,6 +102,31 @@ async function main() {
   const relayerServer = createServer(relayer);
   await new Promise((r) => relayerServer.listen(RELAYER_PORT, "127.0.0.1", r));
 
+  // Local screener: approves every deposit except from wallets on `blocklist`.
+  const blocklist = [];
+  const poolAsPostman = new ethers.Contract(
+    dep.pool,
+    [
+      "event NewDeposit(uint256 indexed label, address indexed depositor, address indexed asset, uint256 amount)",
+      "function aspRoot() view returns (uint256)",
+      "function updateAssociationSet(uint256 root, uint256[] labels, string uri)",
+    ],
+    deployer
+  );
+  const aspServer = http.createServer(async (req, res) => {
+    const cors = { "access-control-allow-origin": "*", "content-type": "application/json" };
+    if (req.method === "OPTIONS") return res.writeHead(204, cors).end();
+    try {
+      const r = await publishAssociationSet(poolAsPostman, { fromBlock: dep.deployBlock, blocklist });
+      console.log(`  [screener] ${r.total} deposits, ${r.approved} approved${r.changed ? ", published" : ""}`);
+      res.writeHead(200, cors).end(JSON.stringify({ ...r, root: r.root }));
+    } catch (err) {
+      console.log("  [screener error]", err.shortMessage || err.message);
+      res.writeHead(500, cors).end(JSON.stringify({ error: err.message }));
+    }
+  });
+  await new Promise((r) => aspServer.listen(ASP_PORT, "127.0.0.1", r));
+
   console.log("Building app for localhost…");
   const cfgPath = path.join(here, "localhost.config.json");
   fs.writeFileSync(cfgPath, JSON.stringify({
@@ -112,6 +139,7 @@ async function main() {
     deployBlock: dep.deployBlock,
     assets: [{ address: dep.mockToken, symbol: "vTSLA", name: "vTSLA test token" }],
     relayers: [`http://127.0.0.1:${RELAYER_PORT}`],
+    aspUpdateUrl: `http://127.0.0.1:${ASP_PORT}/asp-update`,
   }, null, 2));
   execFileSync("node", [path.join(root, "webapp", "build.mjs"), cfgPath], { cwd: root, stdio: "inherit" });
   const appServer = await serveStatic(path.join(root, "webapp", "dist"), APP_PORT);
@@ -245,6 +273,28 @@ async function main() {
   check(/Not enough private balance/.test(await page.textContent('[data-testid="error"]')), "overspending shows 'Not enough private balance'");
   await page.click('[data-testid="close"]');
 
+  // Compliance: a deposit from a blocked wallet waits for approval and can only go back.
+  blocklist.push(userAddr);
+  await page.click('[data-testid="tab-deposit"]');
+  await page.fill('[data-testid="amount"]', "10");
+  await page.click('[data-testid="submit-deposit"]');
+  await done("blocked deposit");
+  await page.waitForSelector('[data-testid="pending-vTSLA"]');
+  check(/10 waiting for approval/.test(await page.textContent('[data-testid="pending-vTSLA"]')), "a blocked deposit shows as '10 waiting for approval'");
+  await page.click('[data-testid="tab-withdraw"]');
+  await page.fill('[data-testid="amount"]', "50");
+  await page.fill('[data-testid="to"]', fresh);
+  await page.click('[data-testid="submit-withdraw"]');
+  await page.waitForSelector('[data-testid="error"]');
+  check(/waiting for approval/.test(await page.textContent('[data-testid="error"]')), "withdrawing more than the approved amount explains the rest is waiting");
+  await page.click('[data-testid="close"]');
+  await page.screenshot({ path: path.join(shots, "7-waiting.png") });
+  await page.click('[data-testid="return-to-depositor"]');
+  await done("return to depositor");
+  check((await token.balanceOf(userAddr)) === e(405), "'Return to depositing wallet' sends the 10 back to the wallet that deposited it");
+  check((await privateBalance()) === e(44) && !(await page.$('[data-testid="pending-vTSLA"]')), "nothing left waiting; private balance back to 44");
+  blocklist.length = 0;
+
   // Stock split shows shares
   await (await token.setUIMultiplier(e(2))).wait();
   await page.click('[data-testid="refresh"]');
@@ -279,6 +329,7 @@ async function main() {
   await browser.close();
   appServer.close();
   relayerServer.close();
+  aspServer.close();
   console.log("\nWeb app E2E PASSED");
 }
 

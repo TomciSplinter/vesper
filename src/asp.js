@@ -5,22 +5,11 @@
 const { getAddress } = require("ethers");
 const { MerkleTree } = require("./merkleTree");
 const { MERKLE_TREE_HEIGHT } = require("./constants");
+const { queryAll } = require("./events");
 
 /** All deposits: [{ label, depositor, asset, amount, block, timestamp? }] in order. */
 async function fetchDeposits(pool, fromBlock = 0) {
-  const provider = pool.runner.provider || pool.runner;
-  const latest = await provider.getBlockNumber();
-  const filter = pool.filters.NewDeposit();
-  const query = async (from, to, depth = 0) => {
-    try {
-      return await pool.queryFilter(filter, from, to);
-    } catch (err) {
-      if (from >= to || depth > 20) throw err;
-      const mid = Math.floor((from + to) / 2);
-      return [...(await query(from, mid, depth + 1)), ...(await query(mid + 1, to, depth + 1))];
-    }
-  };
-  const events = await query(Number(fromBlock), latest);
+  const events = await queryAll(pool, pool.filters.NewDeposit(), fromBlock);
   return events.map((e) => ({
     label: BigInt(e.args.label),
     depositor: getAddress(e.args.depositor),

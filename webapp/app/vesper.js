@@ -11,11 +11,16 @@ import {
   selectNotes,
   getRelayerInfo,
   relayTransaction,
+  fetchAssociationSet,
 } from "../../src/index.js";
 
 const POOL_ABI = [
   "event NewCommitment(bytes32 indexed commitment, uint256 index, bytes encryptedOutput)",
-  "function transact((bytes proof,bytes32 root,bytes32[2] inputNullifiers,bytes32[2] outputCommitments,uint256 publicAmount,bytes32 extDataHash) args,(address recipient,int256 extAmount,address relayer,uint256 fee,bytes encryptedOutput1,bytes encryptedOutput2) extData,address asset)",
+  "event AssociationSetUpdated(uint256 root, uint256[] labels, string uri)",
+  "function transact((bytes proof,bytes32 root,bytes32[2] inputNullifiers,bytes32[2] outputCommitments,uint256 publicAmount,bytes32 extDataHash,uint256 newLabel,uint256 aspRoot,uint256 exitLabel) args,(address recipient,int256 extAmount,address relayer,uint256 fee,bytes encryptedOutput1,bytes encryptedOutput2) extData,address asset)",
+  "function nextDepositLabel(address depositor) view returns (uint256)",
+  "function depositorOf(uint256 label) view returns (address)",
+  "function aspRoot() view returns (uint256)",
   "function isSpent(bytes32 nullifier) view returns (bool)",
   "function assetConfig(address) view returns (bool depositsEnabled, uint256 maxDepositAmount)",
   "function depositsPaused() view returns (bool)",
@@ -39,6 +44,8 @@ export const parseAmount = (s) => {
   if (v <= 0n) throw new Error("Enter an amount above zero.");
   return v;
 };
+
+const sum = (notes) => notes.reduce((s, n) => s + n.amount, 0n);
 
 export class Vesper {
   constructor(config) {
@@ -122,9 +129,21 @@ export class Vesper {
 
   // ---------------------------------------------------------- balances
 
-  /** { notes, byAsset: [{ asset, total, notes, uiMultiplier, walletBalance }] } */
+  /** Approved deposit labels (null if the screener hasn't published a list yet). */
+  async associationSet() {
+    return fetchAssociationSet(this.pool, this.config.deployBlock || 0);
+  }
+
+  /**
+   * { notes, byAsset: [{ asset, total, approved, pending, notes, uiMultiplier, walletBalance }] }
+   * approved = can be withdrawn privately; pending = waiting for approval (can only
+   * be returned to the wallet that deposited it, or sent privately without a relayer).
+   */
   async balances() {
-    const notes = await scanNotes(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 });
+    const [notes, asp] = await Promise.all([
+      scanNotes(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 }),
+      this.associationSet().catch(() => null),
+    ]);
     const byAsset = [];
     for (const a of this.assets) {
       const mine = notes.filter((n) => n.asset === BigInt(a.address));
@@ -134,9 +153,11 @@ export class Vesper {
         uiMultiplier = await token.uiMultiplier();
       } catch {}
       const walletBalance = this.account && !this.viewOnly ? await token.balanceOf(this.account) : null;
-      byAsset.push({ asset: a, total: mine.reduce((s, n) => s + n.amount, 0n), notes: mine, uiMultiplier, walletBalance });
+      const total = mine.reduce((s, n) => s + n.amount, 0n);
+      const approved = mine.filter((n) => asp?.has(n.label)).reduce((s, n) => s + n.amount, 0n);
+      byAsset.push({ asset: a, total, approved, pending: total - approved, notes: mine, uiMultiplier, walletBalance });
     }
-    return { notes, byAsset };
+    return { notes, byAsset, asp };
   }
 
   async relayer() {
@@ -194,8 +215,22 @@ export class Vesper {
       await (await token.approve(this.config.pool, amount)).wait();
     }
     onStep("Creating your private proof (this can take a little while)…");
-    const prepared = await this._prepare({ asset, outputs: [new Utxo({ amount, keypair: this.keypair, asset })] });
-    return this._sendOwn(prepared, asset, onStep);
+    const prepared = await this._prepare({ asset, depositor: this.account, outputs: [new Utxo({ amount, keypair: this.keypair, asset })] });
+    const hash = await this._sendOwn(prepared, asset, onStep);
+    await this._requestApproval(onStep);
+    return hash;
+  }
+
+  /** Asks the screener to review new deposits (testnet: runs right away). Best effort. */
+  async _requestApproval(onStep) {
+    if (!this.config.aspUpdateUrl) return;
+    onStep("Checking your deposit for approval…");
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 45_000);
+      await fetch(this.config.aspUpdateUrl, { method: "POST", signal: ctl.signal });
+      clearTimeout(t);
+    } catch {}
   }
 
   /** Private send to a Vesper address. useRelayer keeps your wallet out of it. */
@@ -203,8 +238,10 @@ export class Vesper {
     this._needSpender();
     const asset = getAddress(assetAddr);
     const recipient = Keypair.fromAddress(toVesperAddress);
+    const asp = await this.associationSet();
     const { fee, relayer } = await this._feeFor(asset, useRelayer);
-    const inputs = await this._pickNotes(asset, amount + fee);
+    // A relayer fee leaves the pool, so relayed sends need approved money.
+    const inputs = await this._pickNotes(asset, amount + fee, { asp, approvedOnly: !!relayer });
     const change = inputs.reduce((s, n) => s + n.amount, 0n) - amount - fee;
     onStep("Creating your private proof (this can take a little while)…");
     const prepared = await this._prepare({
@@ -213,17 +250,19 @@ export class Vesper {
       outputs: [new Utxo({ amount, keypair: recipient, asset }), new Utxo({ amount: change, keypair: this.keypair, asset })],
       fee,
       relayer: relayer ? relayer.relayer : ZeroAddress,
+      asp,
     });
     return relayer ? this._sendRelayed(prepared, asset, relayer.url, onStep) : this._sendOwn(prepared, asset, onStep);
   }
 
-  /** Withdraw `amount` to any 0x address (it receives exactly `amount`). */
+  /** Withdraw `amount` of APPROVED money to any 0x address (it receives exactly `amount`). */
   async withdraw(assetAddr, amount, toAddress, { useRelayer = true } = {}, onStep = () => {}) {
     this._needSpender();
     if (!isAddress(toAddress)) throw new Error("That isn't a valid 0x address.");
     const asset = getAddress(assetAddr);
+    const asp = await this.associationSet();
     const { fee, relayer } = await this._feeFor(asset, useRelayer);
-    const inputs = await this._pickNotes(asset, amount + fee);
+    const inputs = await this._pickNotes(asset, amount + fee, { asp, approvedOnly: true });
     const change = inputs.reduce((s, n) => s + n.amount, 0n) - amount - fee;
     onStep("Creating your private proof (this can take a little while)…");
     const prepared = await this._prepare({
@@ -233,19 +272,49 @@ export class Vesper {
       fee,
       recipient: getAddress(toAddress),
       relayer: relayer ? relayer.relayer : ZeroAddress,
+      asp,
     });
     return relayer ? this._sendRelayed(prepared, asset, relayer.url, onStep) : this._sendOwn(prepared, asset, onStep);
   }
 
-  /** Combine your two biggest notes into one, so later sends can use the full balance. */
+  /**
+   * Returns money that's waiting for approval to the wallet that deposited it.
+   * Public (anyone can link it to that deposit), no fee, sent from your own wallet.
+   * Returns up to two notes from one deposit at a time.
+   */
+  async returnToDepositor(assetAddr, onStep = () => {}) {
+    this._needSpender();
+    if (!this.signer) throw new Error("Connect a wallet to do this.");
+    const asset = getAddress(assetAddr);
+    const asp = await this.associationSet();
+    const notes = (await this._notes(asset)).filter((n) => !asp?.has(n.label));
+    if (!notes.length) throw new Error("Nothing is waiting for approval.");
+    const groups = new Map();
+    for (const n of notes) groups.set(n.label, [...(groups.get(n.label) || []), n]);
+    const [label, group] = [...groups.entries()].sort((a, b) => (sum(b[1]) > sum(a[1]) ? 1 : -1))[0];
+    const inputs = [...group].sort((a, b) => (a.amount < b.amount ? 1 : -1)).slice(0, 2);
+    const depositor = await this.pool.depositorOf(label);
+    onStep("Creating your proof (this can take a little while)…");
+    const prepared = await this._prepare({ asset, inputs, recipient: depositor, exit: true });
+    return this._sendOwn(prepared, asset, onStep);
+  }
+
+  /** Combine your two biggest notes from the same deposit into one. */
   async combine(assetAddr, { useRelayer = true } = {}, onStep = () => {}) {
     this._needSpender();
     const asset = getAddress(assetAddr);
-    const { fee, relayer } = await this._feeFor(asset, useRelayer);
-    const notes = (await scanNotes(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 })).filter((n) => n.asset === BigInt(asset));
-    const two = [...notes].sort((a, b) => (a.amount < b.amount ? 1 : -1)).slice(0, 2);
-    const total = two.reduce((s, n) => s + n.amount, 0n);
-    if (two.length < 2 || total <= fee) throw new Error("Nothing to combine.");
+    const asp = await this.associationSet();
+    const notes = await this._notes(asset);
+    const groups = new Map();
+    for (const n of notes) groups.set(n.label, [...(groups.get(n.label) || []), n]);
+    const best = [...groups.entries()].filter(([, g]) => g.length >= 2).sort((a, b) => (sum(b[1]) > sum(a[1]) ? 1 : -1))[0];
+    if (!best) throw new Error("Nothing to combine: notes from different deposits can't be merged.");
+    const [label, group] = best;
+    // A relayer fee needs approved money; otherwise send it yourself.
+    const { fee, relayer } = await this._feeFor(asset, useRelayer && !!asp?.has(label));
+    const two = [...group].sort((a, b) => (a.amount < b.amount ? 1 : -1)).slice(0, 2);
+    const total = sum(two);
+    if (total <= fee) throw new Error("Nothing to combine.");
     onStep("Creating your private proof (this can take a little while)…");
     const prepared = await this._prepare({
       asset,
@@ -253,6 +322,7 @@ export class Vesper {
       outputs: [new Utxo({ amount: total - fee, keypair: this.keypair, asset })],
       fee,
       relayer: relayer ? relayer.relayer : ZeroAddress,
+      asp,
     });
     return relayer ? this._sendRelayed(prepared, asset, relayer.url, onStep) : this._sendOwn(prepared, asset, onStep);
   }
@@ -267,12 +337,24 @@ export class Vesper {
     return r;
   }
 
-  async _pickNotes(asset, needed) {
-    const notes = (await scanNotes(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 })).filter((n) => n.asset === BigInt(asset));
-    const total = notes.reduce((s, n) => s + n.amount, 0n);
+  async _notes(asset) {
+    return (await scanNotes(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 })).filter((n) => n.asset === BigInt(asset));
+  }
+
+  async _pickNotes(asset, needed, { asp = null, approvedOnly = false } = {}) {
+    const all = await this._notes(asset);
+    const usable = approvedOnly ? all.filter((n) => asp?.has(n.label)) : all;
+    const total = sum(all);
+    const usableTotal = sum(usable);
     if (total < needed) throw new Error(`Not enough private balance: you need ${fmt(needed)} including fees, and have ${fmt(total)}.`);
-    const picked = selectNotes(notes, needed);
-    if (!picked) throw new Error("Your balance is split across too many notes for one transaction. Tap “Combine notes” first.");
+    if (usableTotal < needed) {
+      throw new Error(
+        `Only ${fmt(usableTotal)} of your balance is approved so far; the rest is waiting for approval. ` +
+          "You can wait, send it privately without the relayer, or return it to the wallet that deposited it."
+      );
+    }
+    const picked = selectNotes(usable, needed, (l) => !!asp?.has(l));
+    if (!picked) throw new Error("Your balance is split across too many notes (or deposits) for one transaction. Tap “Combine notes” first.");
     return picked;
   }
 

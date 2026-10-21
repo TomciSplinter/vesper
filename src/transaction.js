@@ -5,6 +5,7 @@ const { FIELD_SIZE, MERKLE_TREE_HEIGHT } = require("./constants");
 const { MerkleTree } = require("./merkleTree");
 const { Utxo } = require("./utxo");
 const { Keypair } = require("./keypair");
+const { queryAll } = require("./events");
 
 // Node defaults: the files scripts/build-circuit.sh writes. (__dirname doesn't exist in browsers.)
 const BUILD = typeof __dirname === "string" ? `${__dirname}/../build` : null;
@@ -32,24 +33,9 @@ function publicAmountField(extAmount, fee) {
   return v >= 0n ? v : FIELD_SIZE + v;
 }
 
-/**
- * Rebuild the pool's tree from its NewCommitment events. If the RPC refuses a big
- * block range, the range is split in half until it accepts.
- */
-async function queryRange(pool, from, to, depth = 0) {
-  try {
-    return await pool.queryFilter(pool.filters.NewCommitment(), from, to);
-  } catch (err) {
-    if (from >= to || depth > 20) throw err;
-    const mid = Math.floor((from + to) / 2);
-    return [...(await queryRange(pool, from, mid, depth + 1)), ...(await queryRange(pool, mid + 1, to, depth + 1))];
-  }
-}
-
+/** Rebuild the pool's tree from its NewCommitment events. */
 async function fetchCommitments(pool, fromBlock = 0) {
-  const provider = pool.runner.provider || pool.runner;
-  const latest = await provider.getBlockNumber();
-  const events = await queryRange(pool, Number(fromBlock), latest);
+  const events = await queryAll(pool, pool.filters.NewCommitment(), fromBlock);
   return events
     .map((e) => ({ commitment: BigInt(e.args.commitment), index: Number(e.args.index), encryptedOutput: e.args.encryptedOutput }))
     .sort((a, b) => a.index - b.index);
@@ -274,19 +260,7 @@ function selectNotes(notes, amount, prefer = () => false) {
  * Returns { root, labels: Set<bigint>, tree, has(label) } or null if none published yet.
  */
 async function fetchAssociationSet(pool, fromBlock = 0, levels = MERKLE_TREE_HEIGHT) {
-  const provider = pool.runner.provider || pool.runner;
-  const latest = await provider.getBlockNumber();
-  const filter = pool.filters.AssociationSetUpdated();
-  const query = async (from, to, depth = 0) => {
-    try {
-      return await pool.queryFilter(filter, from, to);
-    } catch (err) {
-      if (from >= to || depth > 20) throw err;
-      const mid = Math.floor((from + to) / 2);
-      return [...(await query(from, mid, depth + 1)), ...(await query(mid + 1, to, depth + 1))];
-    }
-  };
-  const events = await query(Number(fromBlock), latest);
+  const events = await queryAll(pool, pool.filters.AssociationSetUpdated(), fromBlock);
   if (!events.length) return null;
   const ev = events[events.length - 1];
   const labels = ev.args.labels.map(BigInt);

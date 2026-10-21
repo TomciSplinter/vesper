@@ -198,10 +198,15 @@ function Balances({ vesper, data, onRefresh, refreshing, wide }) {
       )}
       {!data && <p className="muted">Scanning the pool for your notes…</p>}
       {data &&
-        data.byAsset.map(({ asset, total, notes, uiMultiplier, walletBalance }) => (
+        data.byAsset.map(({ asset, total, pending, notes, uiMultiplier, walletBalance }) => (
           <div className="asset" key={asset.address} data-testid={`balance-${asset.symbol}`}>
             <div>
               <div className="sym">{asset.symbol}</div>
+              {pending > 0n && (
+                <div className="pending small" data-testid={`pending-${asset.symbol}`}>
+                  {fmt(pending)} waiting for approval
+                </div>
+              )}
               <div className="muted small">
                 {notes.length} note{notes.length === 1 ? "" : "s"}
                 {walletBalance !== null && !wide ? `, wallet ${fmt(walletBalance)}` : ""}
@@ -256,7 +261,8 @@ function ActionForm({ vesper, kind, data, run }) {
       <AssetSelect vesper={vesper} value={asset} onChange={setAsset} />
       <label className="field">
         <span>
-          Amount {row && kind !== "deposit" && <em>· private {fmt(row.total)}</em>}
+          Amount {row && kind === "send" && <em>· private {fmt(row.total)}</em>}
+          {row && kind === "withdraw" && <em>· available {fmt(row.approved)}</em>}
           {row && kind === "deposit" && row.walletBalance !== null && <em>· wallet {fmt(row.walletBalance)}</em>}
         </span>
         <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" data-testid="amount" />
@@ -281,6 +287,17 @@ function ActionForm({ vesper, kind, data, run }) {
       <button className="btn primary wide" onClick={submit} data-testid={`submit-${kind}`}>
         {titles[kind][0]}
       </button>
+      {kind === "withdraw" && row && row.pending > 0n && (
+        <div className="exit-box">
+          <p className="small">
+            {fmt(row.pending)} {symbol} is waiting for approval, so it can't be withdrawn privately yet. You can wait, or return it to the wallet
+            that deposited it. Returning is public: anyone can see it came back from that deposit.
+          </p>
+          <button className="btn wide" onClick={() => run((s) => vesper.returnToDepositor(asset, s))} data-testid="return-to-depositor">
+            Return to depositing wallet
+          </button>
+        </div>
+      )}
       {kind !== "deposit" && row && row.notes.length > 2 && (
         <button className="link" onClick={() => run((s) => vesper.combine(asset, { useRelayer }, s))} data-testid="combine">
           Combine notes ({row.notes.length})

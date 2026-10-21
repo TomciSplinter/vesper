@@ -1,19 +1,20 @@
 {
   "testnet": true,
-  "chainId": 46630,
-  "chainName": "Robinhood Chain Testnet",
-  "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
-  "explorer": "https://explorer.testnet.chain.robinhood.com",
-  "pool": "0x163BDa760077E965beB13570222C2267aD2A3957",
-  "deployBlock": 140247715,
+  "chainId": 31337,
+  "chainName": "Local test chain",
+  "rpcUrl": "http://127.0.0.1:8545",
+  "explorer": "",
+  "pool": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+  "deployBlock": 6,
   "assets": [
     {
-      "address": "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112",
+      "address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
       "symbol": "vTSLA",
-      "name": "vTSLA (test stand-in, not a real Robinhood token)"
+      "name": "vTSLA test token"
     }
   ],
   "relayers": [
-    "/api"
-  ]
+    "http://127.0.0.1:8788"
+  ],
+  "aspUpdateUrl": "http://127.0.0.1:8789/asp-update"
 }
