@@ -66,7 +66,7 @@ function serveStatic(dir, port) {
 async function main() {
   fs.mkdirSync(shots, { recursive: true });
   const wallet = new ethers.Wallet(process.env.TEST_WALLET_KEY, provider);
-  const token = new ethers.Contract(base.assets[0].address, ["function balanceOf(address) view returns (uint256)"], provider);
+  const token = new ethers.Contract(base.assets.find((a) => a.symbol === "vTSLA").address, ["function balanceOf(address) view returns (uint256)"], provider);
   await new Promise((r) => pass.listen(PASS_PORT, "127.0.0.1", r));
 
   // Local copy of /api/asp-update, signing as the pool's postman (RELAYER_KEY wallet).
@@ -151,6 +151,8 @@ async function main() {
   const start = await priv();
   check(true, `unlocked on Robinhood testnet; private balance ${ethers.formatEther(start)}`);
 
+  const vtsla = base.assets.find((a) => a.symbol === "vTSLA").address;
+  await page.selectOption('[data-testid="asset"]', vtsla);
   await page.fill('[data-testid="amount"]', "2");
   await page.click('[data-testid="submit-deposit"]');
   await done("deposit");
@@ -159,6 +161,7 @@ async function main() {
 
   const fresh = ethers.Wallet.createRandom().address;
   await page.click('[data-testid="tab-withdraw"]');
+  await page.selectOption('[data-testid="asset"]', vtsla);
   await page.fill('[data-testid="amount"]', "1");
   await page.fill('[data-testid="to"]', fresh);
   await page.waitForFunction(() => /fee 0\.1/.test(document.querySelector('[data-testid="form-withdraw"]').textContent));

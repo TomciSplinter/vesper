@@ -2,10 +2,10 @@
   "network": "robinhoodTestnet",
   "chainId": 46630,
   "deployer": "0x0c155951c104aC663F97967959a75A7fB1A3C1B3",
-  "deployBlock": 140286311,
-  "hasher": "0x08378A9f6e781102bfc433b1cec923D8CC85a0a5",
-  "verifier": "0x2fc39a50496bFF439b959589ad0D00F406db8b86",
-  "pool": "0x0c350E68C861b01E4Ac7bbf895C3e0f0e8b7f424",
+  "deployBlock": 140336934,
+  "hasher": "0x60B5b1a57EEa57b9A1c92619F7214B506E9cF28b",
+  "verifier": "0xe6B54582280A754b59d5318580C24876893c385f",
+  "pool": "0x436cf7a631A32B49a8a2edff4500a47D214D9033",
   "assets": [
     "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E:1000",
     "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112:1000"
@@ -15,5 +15,8 @@
     "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E": "0.01",
     "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112": "0.1"
   },
-  "sponsorExits": true
+  "sponsorExits": true,
+  "previousPools": [
+    "0x0c350E68C861b01E4Ac7bbf895C3e0f0e8b7f424"
+  ]
 }
