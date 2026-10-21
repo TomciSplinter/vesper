@@ -9,7 +9,8 @@
 //   POOL           optional, ignored: the pool comes from deployments/<DEPLOYMENT_NAME>.json,
 //                  the same file the web app is built from, so the two always agree
 //   DEPLOYMENT_NAME optional, default "robinhoodTestnet"
-//   RELAYER_FEES   "0xToken:0.1,0xOther:0.2"  minimum fee per asset, whole tokens
+//   RELAYER_FEES   optional "0xToken:0.1,0xOther:0.2": minimum fee per asset, whole tokens.
+//                  Defaults come from the deployment file's "relayerFees"; this overrides per asset.
 const { ethers } = require("ethers");
 const { Relayer, RelayError } = require("./relayer");
 
@@ -32,8 +33,8 @@ const clean = (v) => String(v).trim().replace(/^["']+|["']+$/g, "").trim();
 // contents), so a misconfiguration shows up as a clear message instead of "internal error".
 function relayerFromEnv(env = process.env) {
   if (cached) return cached;
-  const names = ["RELAYER_KEY", "RPC_URL", "CHAIN_ID", "RELAYER_FEES"];
-  const v = Object.fromEntries(names.map((k) => [k, env[k] === undefined ? "" : clean(env[k])]));
+  const names = ["RELAYER_KEY", "RPC_URL", "CHAIN_ID"];
+  const v = Object.fromEntries([...names, "RELAYER_FEES"].map((k) => [k, env[k] === undefined ? "" : clean(env[k])]));
   const missing = names.filter((k) => !v[k]);
   if (missing.length) throw new RelayError(`relayer not configured (missing ${missing.join(", ")})`, 503);
   const bad = (name, why) => new RelayError(`relayer misconfigured: ${name} ${why}`, 503);
@@ -48,6 +49,7 @@ function relayerFromEnv(env = process.env) {
   // "0xToken:0.1,0xOther:0.2". Also accepts a decimal comma ("0,1"), any separator
   // between address and fee (":", space, "=", a look-alike colon) and ";" between entries.
   const minFees = {};
+  for (const [asset, fee] of Object.entries(dep.relayerFees || {})) minFees[ethers.getAddress(asset)] = ethers.parseEther(String(fee));
   const entry = /(0x[0-9a-fA-F]{40})[^0-9a-zA-Z]*?([0-9]+(?:[.,][0-9]+)?)(?![0-9a-fA-Fx])/g;
   for (const [, asset, fee] of v.RELAYER_FEES.matchAll(entry)) {
     try {
@@ -56,7 +58,7 @@ function relayerFromEnv(env = process.env) {
       throw bad("RELAYER_FEES", "fee must be a number, like 0xTokenAddress:0.1");
     }
   }
-  if (/0x[0-9a-fA-F]{40}/.test(v.RELAYER_FEES) && !Object.keys(minFees).length) {
+  if (/0x[0-9a-fA-F]{40}/.test(v.RELAYER_FEES) && ![...v.RELAYER_FEES.matchAll(entry)].length) {
     throw bad("RELAYER_FEES", "fee must be a number, like 0xTokenAddress:0.1");
   }
   if (!Object.keys(minFees).length) throw bad("RELAYER_FEES", "needs at least one 0xTokenAddress:fee");

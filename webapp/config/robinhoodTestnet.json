@@ -8,9 +8,14 @@
   "deployBlock": 140286311,
   "assets": [
     {
+      "address": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
+      "symbol": "TSLA",
+      "name": "Tesla (Robinhood testnet Stock Token)"
+    },
+    {
       "address": "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112",
       "symbol": "vTSLA",
-      "name": "vTSLA (test stand-in, not a real Robinhood token)"
+      "name": "vTSLA (Vesper test stand-in)"
     }
   ],
   "relayers": [

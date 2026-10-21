@@ -80,6 +80,12 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 
 - The Vercel relayer now takes the pool from `deployments/robinhoodTestnet.json` (same as the app); the `POOL` env var is ignored. New pools only need a push.
 
+## Real Robinhood test stock (21 Oct 2026)
+- Testnet TSLA Stock Token: `0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E` ("Tesla", 18 decimals, about 238k holders, has `uiMultiplier()` and `paused()`, minted 5 at a time by the official faucet at faucet.testnet.chain.robinhood.com). Many look-alike "TSLA" tokens exist on testnet; this is the one with the stock-token interface that the faucet mints.
+- Checked: a simulated transfer from a holder into the pool succeeds (no contract-recipient block).
+- Enabled in the compliance pool (cap 1000 per deposit). Added to the app as "TSLA" (vTSLA kept).
+- Relayer fees now default from `deployments/robinhoodTestnet.json` → `relayerFees` (TSLA 0.01, vTSLA 0.1); the `RELAYER_FEES` env var is optional and overrides per asset.
+
 ## Next steps
 1. ~~`npm install`, install circom, `npm run build`, `npm test`; fix whatever fails.~~ Done.
 2. Deploy to Robinhood Chain testnet with a real stock token address.
