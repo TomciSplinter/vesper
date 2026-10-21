@@ -1,10 +1,10 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const { Keypair, Utxo, prepareTransaction, buildTree, scanNotes, serializeRelayRequest } = require("../src");
+const { Keypair, Utxo, buildTree, scanNotes, serializeRelayRequest } = require("../src");
 const { Relayer } = require("../relayer/relayer");
 const { createHandlers, relayerFromEnv } = require("../relayer/serverless");
-const { deployVesper } = require("./helpers");
+const { deployVesper, approveAll, prepareTransaction } = require("./helpers");
 
 const e = (n) => ethers.parseEther(String(n));
 const FEE = e("0.1");
@@ -34,8 +34,10 @@ describe("Serverless relayer (Vercel functions)", function () {
     const { args, extData } = await prepareTransaction({
       pool: ctx.pool, asset: ctx.tslaAddr, chainId: ctx.chainId, tree: await buildTree(ctx.pool),
       outputs: [new Utxo({ amount: e(10), keypair: ctx.aliceKp, asset: ctx.tslaAddr })],
+      depositor: ctx.alice.address,
     });
     await ctx.pool.connect(ctx.alice).transact(args, extData, ctx.tslaAddr);
+    await approveAll(ctx);
     const relayer = new Relayer({ signer: ctx.relayer, pool: await ctx.pool.getAddress(), minFees: { [ctx.tslaAddr]: FEE } });
     ctx.h = createHandlers(() => relayer);
     return ctx;

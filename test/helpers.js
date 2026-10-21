@@ -37,3 +37,28 @@ async function deployVesper() {
 }
 
 module.exports = { deployVesper };
+
+// ---- compliance helpers ----
+const src = require("../src");
+
+/** Publishes an association set approving every deposit so far (except `except` labels). */
+async function approveAll(ctx, { except = [] } = {}) {
+  const skip = new Set(except.map(BigInt));
+  const labels = (await src.fetchDeposits(ctx.pool)).map((d) => d.label).filter((l) => !skip.has(l));
+  if (!labels.length) return null;
+  const root = src.associationTree(labels).root();
+  await (await ctx.pool.connect(ctx.owner).updateAssociationSet(root, labels, "test")).wait();
+  return root;
+}
+
+/**
+ * prepareTransaction for tests: same arguments, but fills in the current association
+ * set automatically (unless `asp` or `exit` is given), so payouts prove approval.
+ */
+async function prepareTransaction(opts) {
+  if (opts.asp === undefined && !opts.exit) opts = { ...opts, asp: await src.fetchAssociationSet(opts.pool) };
+  return src.prepareTransaction(opts);
+}
+
+module.exports.approveAll = approveAll;
+module.exports.prepareTransaction = prepareTransaction;

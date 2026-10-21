@@ -1,14 +1,14 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const { Keypair, Utxo, MerkleTree, prepareTransaction, buildTree, scanNotes, hashExtData, toBytes32, toShares, MERKLE_TREE_HEIGHT } = require("../src");
-const { deployVesper } = require("./helpers");
+const { Keypair, Utxo, MerkleTree, buildTree, scanNotes, hashExtData, toBytes32, toShares, MERKLE_TREE_HEIGHT } = require("../src");
+const { deployVesper, approveAll, prepareTransaction } = require("./helpers");
 
 const e = (n) => ethers.parseEther(String(n));
 
 describe("VesperPool", function () {
   // Runs a transaction end to end with a real Groth16 proof.
-  async function transact(ctx, signer, { asset, inputs = [], outputs = [], fee = 0n, recipient, relayer }) {
+  async function transact(ctx, signer, { asset, inputs = [], outputs = [], fee = 0n, recipient, relayer, exit }) {
     const tree = await buildTree(ctx.pool);
     const { args, extData } = await prepareTransaction({
       pool: ctx.pool,
@@ -20,6 +20,8 @@ describe("VesperPool", function () {
       fee,
       recipient,
       relayer,
+      exit,
+      depositor: signer.address,
     });
     return ctx.pool.connect(signer).transact(args, extData, asset);
   }
@@ -33,6 +35,7 @@ describe("VesperPool", function () {
       asset: ctx.tslaAddr,
       outputs: [new Utxo({ amount: e(100), keypair: ctx.aliceKp, asset: ctx.tslaAddr })],
     });
+    await approveAll(ctx);
     return ctx;
   }
 

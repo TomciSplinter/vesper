@@ -7,45 +7,69 @@ include "./merkleproof.circom";
 include "./keypair.circom";
 
 /*
-Vesper shielded transaction: spend nIns notes, create nOuts notes, all of one asset.
+Vesper shielded transaction: spend nIns notes, create nOuts notes, all of one asset
+and one deposit LABEL.
 
-Note (UTXO) = { amount, pubkey, blinding, asset }
-  commitment = Poseidon(amount, pubkey, blinding, asset)
+Note (UTXO) = { amount, pubkey, blinding, asset, label }
+  commitment = Poseidon(amount, pubkey, blinding, asset, label)
   nk         = Poseidon(privKey, NK_DOMAIN)          (nullifier key, shared in the view key)
   nullifier  = Poseidon(commitment, merklePath, nk)
 
-One circuit covers deposit, private transfer and withdrawal:
-  sum(inputs) + publicAmount == sum(outputs)
+Labels (Privacy Pools style compliance):
+  - Every deposit gets a fresh label chosen by the pool contract (public `newLabel`).
+    A deposit may not spend existing notes, so new money can't hide under an old label.
+  - Every other transaction keeps the label of the notes it spends (private `inLabel`);
+    all real inputs must share it, and every output carries it. So a label follows the
+    money through private transfers, to whoever receives it.
+  - Withdrawals prove one of:
+      aspRoot != 0:   the label is in the association set (approved deposits) whose
+                      Merkle root is `aspRoot`. Private: doesn't reveal which label.
+      exitLabel != 0: the label equals `exitLabel`. Public: the contract then only pays
+                      the original depositor of that label (exit for unapproved money).
+    The contract decides which of these each transaction must use.
+
+Value conservation:  sum(inputs) + publicAmount == sum(outputs)
 where publicAmount = extAmount - fee (mod p) is checked by the pool contract.
 
-PUBLIC SIGNAL ORDER (must match VesperPool._verify): the order public signals are
-DECLARED in this template, i.e.
-  root, publicAmount, extDataHash, asset, inputNullifier[0..nIns), outputCommitment[0..nOuts)
-Keep declarations in this order.
+PUBLIC SIGNAL ORDER (must match VesperPool._verify) = declaration order below:
+  root, publicAmount, extDataHash, asset, newLabel, aspRoot, exitLabel,
+  inputNullifier[0..nIns), outputCommitment[0..nOuts)
 */
-template Transaction(levels, nIns, nOuts) {
+template Transaction(levels, aspLevels, nIns, nOuts) {
     // ---- public ----
     signal input root;
     signal input publicAmount;
     signal input extDataHash;
     signal input asset;
+    signal input newLabel;
+    signal input aspRoot;
+    signal input exitLabel;
     signal input inputNullifier[nIns];
+    signal input outputCommitment[nOuts];
 
-    // ---- private: inputs ----
+    // ---- private ----
+    signal input inLabel;
     signal input inAmount[nIns];
     signal input inPrivateKey[nIns];
     signal input inBlinding[nIns];
     signal input inPathIndices[nIns];
     signal input inPathElements[nIns][levels];
 
-    // ---- public ----
-    signal input outputCommitment[nOuts];
-
-    // ---- private: outputs ----
     signal input outAmount[nOuts];
     signal input outPubkey[nOuts];
     signal input outBlinding[nOuts];
 
+    signal input aspPathIndices;
+    signal input aspPathElements[aspLevels];
+
+    // ---- the transaction's label ----
+    // isDeposit = (newLabel != 0); label = isDeposit ? newLabel : inLabel
+    component newLabelZero = IsZero();
+    newLabelZero.in <== newLabel;
+    signal isDeposit <== 1 - newLabelZero.out;
+    signal label <== inLabel + isDeposit * (newLabel - inLabel);
+
+    // ---- inputs ----
     component inKeypair[nIns];
     component inNullifierKey[nIns];
     component inCommitmentHasher[nIns];
@@ -58,11 +82,12 @@ template Transaction(levels, nIns, nOuts) {
         inKeypair[tx] = Keypair();
         inKeypair[tx].privateKey <== inPrivateKey[tx];
 
-        inCommitmentHasher[tx] = Poseidon(4);
+        inCommitmentHasher[tx] = Poseidon(5);
         inCommitmentHasher[tx].inputs[0] <== inAmount[tx];
         inCommitmentHasher[tx].inputs[1] <== inKeypair[tx].publicKey;
         inCommitmentHasher[tx].inputs[2] <== inBlinding[tx];
         inCommitmentHasher[tx].inputs[3] <== asset;
+        inCommitmentHasher[tx].inputs[4] <== inLabel;
 
         inNullifierKey[tx] = NullifierKey();
         inNullifierKey[tx].privateKey <== inPrivateKey[tx];
@@ -90,16 +115,21 @@ template Transaction(levels, nIns, nOuts) {
         sumIns += inAmount[tx];
     }
 
+    // A deposit can't also spend notes (else fresh money could take an old, approved label).
+    newLabel * sumIns === 0;
+
+    // ---- outputs ----
     component outCommitmentHasher[nOuts];
     component outAmountCheck[nOuts];
     var sumOuts = 0;
 
     for (var tx = 0; tx < nOuts; tx++) {
-        outCommitmentHasher[tx] = Poseidon(4);
+        outCommitmentHasher[tx] = Poseidon(5);
         outCommitmentHasher[tx].inputs[0] <== outAmount[tx];
         outCommitmentHasher[tx].inputs[1] <== outPubkey[tx];
         outCommitmentHasher[tx].inputs[2] <== outBlinding[tx];
         outCommitmentHasher[tx].inputs[3] <== asset;
+        outCommitmentHasher[tx].inputs[4] <== label;
         outCommitmentHasher[tx].out === outputCommitment[tx];
 
         // Prevent field overflow: every new note is < 2^248.
@@ -124,6 +154,25 @@ template Transaction(levels, nIns, nOuts) {
 
     // Value conservation.
     sumIns + publicAmount === sumOuts;
+
+    // ---- compliance ----
+    // If aspRoot is set: the label is a leaf of the association set.
+    component aspTree = MerkleProof(aspLevels);
+    aspTree.leaf <== label;
+    aspTree.pathIndices <== aspPathIndices;
+    for (var i = 0; i < aspLevels; i++) {
+        aspTree.pathElements[i] <== aspPathElements[i];
+    }
+    component aspCheck = ForceEqualIfEnabled();
+    aspCheck.in[0] <== aspRoot;
+    aspCheck.in[1] <== aspTree.root;
+    aspCheck.enabled <== aspRoot;
+
+    // If exitLabel is set: it is this transaction's label.
+    component exitCheck = ForceEqualIfEnabled();
+    exitCheck.in[0] <== exitLabel;
+    exitCheck.in[1] <== label;
+    exitCheck.enabled <== exitLabel;
 
     // Bind extDataHash into the proof (recipient, relayer, fee, encrypted notes)
     // so a front-runner can't swap them. Squaring forces it into a constraint.

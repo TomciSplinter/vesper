@@ -17,8 +17,14 @@ import {IVerifier} from "./interfaces/IVerifier.sol";
 ///
 /// Safety rules this contract keeps:
 ///  - Not upgradeable. The verifier and hasher are fixed at deploy time.
-///  - Admin powers only limit NEW deposits (allowlist, caps, pause). Nothing an
-///    admin does can block a withdrawal or move user funds.
+///  - Admin powers only limit NEW deposits (allowlist, caps, pause) and publish the
+///    compliance list. Nothing an admin does can move user funds or stop a user from
+///    getting them back: money from a deposit that isn't approved can always be
+///    withdrawn to the wallet that deposited it ("exit"), just not privately.
+///  - Compliance (Privacy Pools style): every deposit gets a label that follows the
+///    money. Any transaction that pays value out of the pool (withdrawal or fee) must
+///    prove its label is in the current association set (approved deposits), or exit
+///    to the label's original depositor with no fee.
 ///  - Notes store RAW token amounts. Stock Token splits/dividends change only the
 ///    ERC-8056 uiMultiplier, never raw balances, so notes stay correct.
 ///  - If an asset's issuer pauses its token, withdrawals of that asset revert
@@ -52,6 +58,9 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
         bytes32[2] outputCommitments;
         uint256 publicAmount;
         bytes32 extDataHash;
+        uint256 newLabel; // deposits: must equal nextDepositLabel(msg.sender); otherwise 0
+        uint256 aspRoot; // association-set root the label is proven to be in, or 0
+        uint256 exitLabel; // label being exited to its depositor, or 0
     }
 
     mapping(address => AssetConfig) public assetConfig;
@@ -59,11 +68,23 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     address public guardian;
     bool public depositsPaused;
 
+    // ---- compliance ----
+    mapping(address => uint256) public depositNonce;
+    mapping(uint256 => address) public depositorOf; // label => wallet that made the deposit
+    address public aspPostman; // publishes the association set (approved deposit labels)
+    uint256 public aspRoot; // current association-set root
+    uint256 public previousAspRoot; // still accepted, so proofs made just before an update work
+    bool public complianceRequired = true; // payouts must prove an approved label (or exit)
+
     event NewCommitment(bytes32 indexed commitment, uint256 index, bytes encryptedOutput);
     event NewNullifier(bytes32 indexed nullifier);
     event AssetConfigured(address indexed asset, bool depositsEnabled, uint256 maxDepositAmount);
     event DepositsPaused(bool paused);
     event GuardianSet(address guardian);
+    event NewDeposit(uint256 indexed label, address indexed depositor, address indexed asset, uint256 amount);
+    event AssociationSetUpdated(uint256 root, uint256[] labels, string uri);
+    event AspPostmanSet(address postman);
+    event ComplianceRequired(bool required);
 
     error AssetNotEnabled();
     error DepositsArePaused();
@@ -76,6 +97,10 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     error BadRecipient();
     error FeeOnTransferNotSupported();
     error NotGuardian();
+    error BadLabel();
+    error NotApproved();
+    error BadExit();
+    error NotPostman();
 
     constructor(IVerifier _verifier, IHasher _hasher, uint32 _levels, address _owner)
         MerkleTreeWithHistory(_levels, _hasher)
@@ -83,6 +108,7 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     {
         verifier = _verifier;
         guardian = _owner;
+        aspPostman = _owner;
     }
 
     // ------------------------------------------------------------------ user
@@ -115,6 +141,16 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
         return bytes32(uint256(keccak256(abi.encode(block.chainid, address(this), asset, extData))) % FIELD_SIZE);
     }
 
+    /// The label the next deposit from `depositor` must use (it goes into the proof).
+    function nextDepositLabel(address depositor) public view returns (uint256) {
+        uint256 l = uint256(keccak256(abi.encode(block.chainid, address(this), depositor, depositNonce[depositor]))) % FIELD_SIZE;
+        return l == 0 ? 1 : l;
+    }
+
+    function isKnownAspRoot(uint256 root) public view returns (bool) {
+        return root != 0 && (root == aspRoot || root == previousAspRoot);
+    }
+
     function calculatePublicAmount(int256 extAmount, uint256 fee) public pure returns (uint256) {
         if (fee >= MAX_FEE) revert BadPublicAmount();
         if (extAmount <= -MAX_EXT_AMOUNT || extAmount >= MAX_EXT_AMOUNT) revert BadPublicAmount();
@@ -134,6 +170,28 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
         emit GuardianSet(_guardian);
     }
 
+    function setAspPostman(address postman) external onlyOwner {
+        aspPostman = postman;
+        emit AspPostmanSet(postman);
+    }
+
+    /// Exits to the original depositor always work, whatever this is set to.
+    function setComplianceRequired(bool required) external onlyOwner {
+        complianceRequired = required;
+        emit ComplianceRequired(required);
+    }
+
+    /// Publishes a new association set: the Poseidon Merkle root of the approved
+    /// labels, in order. `labels` is emitted so wallets can rebuild the tree and check
+    /// the root themselves; `uri` can point at the screening policy or report.
+    function updateAssociationSet(uint256 root, uint256[] calldata labels, string calldata uri) external {
+        if (msg.sender != aspPostman) revert NotPostman();
+        if (root == 0 || root >= FIELD_SIZE) revert NotApproved();
+        previousAspRoot = aspRoot;
+        aspRoot = root;
+        emit AssociationSetUpdated(root, labels, uri);
+    }
+
     /// Emergency brake on NEW deposits only. Withdrawals always stay open.
     function setDepositsPaused(bool paused) external {
         if (msg.sender != guardian && msg.sender != owner()) revert NotGuardian();
@@ -150,6 +208,7 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
         }
         if (args.extDataHash != hashExtData(extData, asset)) revert BadExtDataHash();
         if (args.publicAmount != calculatePublicAmount(extData.extAmount, extData.fee)) revert BadPublicAmount();
+        _checkCompliance(args, extData, asset);
         if (!_verify(args, asset)) revert InvalidProof();
 
         for (uint256 i = 0; i < 2; i++) {
@@ -173,16 +232,49 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
         }
     }
 
+    function _checkCompliance(Proof calldata args, ExtData calldata extData, address asset) internal {
+        if (extData.extAmount > 0) {
+            // Deposit: a fresh label, recorded against the depositing wallet.
+            if (args.newLabel != nextDepositLabel(msg.sender)) revert BadLabel();
+            if (args.aspRoot != 0 || args.exitLabel != 0) revert BadLabel();
+            depositNonce[msg.sender]++;
+            depositorOf[args.newLabel] = msg.sender;
+            emit NewDeposit(args.newLabel, msg.sender, asset, uint256(extData.extAmount));
+            return;
+        }
+        if (args.newLabel != 0) revert BadLabel();
+
+        bool paysOut = extData.extAmount < 0 || extData.fee > 0;
+        if (!paysOut) {
+            if (args.aspRoot != 0 || args.exitLabel != 0) revert BadLabel();
+            return;
+        }
+        if (args.exitLabel != 0) {
+            // Exit: unapproved money goes back to whoever deposited it, publicly, no fee.
+            address depositor = depositorOf[args.exitLabel];
+            if (depositor == address(0) || args.aspRoot != 0 || extData.fee != 0 || extData.recipient != depositor) revert BadExit();
+            return;
+        }
+        if (args.aspRoot != 0) {
+            if (!isKnownAspRoot(args.aspRoot)) revert NotApproved();
+        } else if (complianceRequired) {
+            revert NotApproved();
+        }
+    }
+
     function _verify(Proof calldata args, address asset) internal view returns (bool) {
         (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) =
             abi.decode(args.proof, (uint256[2], uint256[2][2], uint256[2]));
 
         // Order = public signal declaration order in circuits/transaction.circom.
-        uint256[8] memory pub = [
+        uint256[11] memory pub = [
             uint256(args.root),
             args.publicAmount,
             uint256(args.extDataHash),
             uint256(uint160(asset)),
+            args.newLabel,
+            args.aspRoot,
+            args.exitLabel,
             uint256(args.inputNullifiers[0]),
             uint256(args.inputNullifiers[1]),
             uint256(args.outputCommitments[0]),

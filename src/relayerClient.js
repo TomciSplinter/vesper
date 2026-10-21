@@ -3,7 +3,7 @@
 function serializeRelayRequest({ args, extData }, asset) {
   const s = (v) => (typeof v === "bigint" ? v.toString() : v);
   return {
-    args: { ...args, publicAmount: s(args.publicAmount) },
+    args: { ...args, publicAmount: s(args.publicAmount), newLabel: s(args.newLabel ?? 0n), aspRoot: s(args.aspRoot ?? 0n), exitLabel: s(args.exitLabel ?? 0n) },
     extData: { ...extData, extAmount: s(extData.extAmount), fee: s(extData.fee) },
     asset,
   };

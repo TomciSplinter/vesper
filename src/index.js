@@ -6,4 +6,5 @@ module.exports = {
   ...require("./utxo"),
   ...require("./transaction"),
   ...require("./relayerClient"),
+  ...require("./asp"),
 };

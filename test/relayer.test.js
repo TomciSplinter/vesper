@@ -1,10 +1,10 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
-const { Keypair, Utxo, prepareTransaction, buildTree, scanNotes, getRelayerInfo, relayTransaction, serializeRelayRequest } = require("../src");
+const { Keypair, Utxo, buildTree, scanNotes, getRelayerInfo, relayTransaction, serializeRelayRequest } = require("../src");
 const { Relayer } = require("../relayer/relayer");
 const { createServer } = require("../relayer/server");
-const { deployVesper } = require("./helpers");
+const { deployVesper, approveAll, prepareTransaction } = require("./helpers");
 
 const e = (n) => ethers.parseEther(String(n));
 const MIN_FEE = e("0.5");
@@ -22,8 +22,10 @@ describe("Relayer", function () {
     const { args, extData } = await prepareTransaction({
       pool: ctx.pool, asset: ctx.tslaAddr, chainId: ctx.chainId, tree: await buildTree(ctx.pool),
       outputs: [new Utxo({ amount: e(100), keypair: ctx.aliceKp, asset: ctx.tslaAddr })],
+      depositor: ctx.alice.address,
     });
     await ctx.pool.connect(ctx.alice).transact(args, extData, ctx.tslaAddr);
+    await approveAll(ctx);
     return ctx;
   }
 
@@ -129,7 +131,7 @@ describe("Relayer", function () {
 
     it("deposits", async function () {
       const ctx = await withRelayer();
-      const p = await prepare(ctx, { outputs: [new Utxo({ amount: e(1), keypair: ctx.aliceKp, asset: ctx.tslaAddr })] });
+      const p = await prepare(ctx, { outputs: [new Utxo({ amount: e(1), keypair: ctx.aliceKp, asset: ctx.tslaAddr })], depositor: ctx.alice.address });
       await expectRejected(ctx, p, ctx.tslaAddr, 400, "deposits can't be relayed");
     });
 

@@ -21,7 +21,7 @@ class RelayError extends Error {
 }
 
 const POOL_ABI = [
-  "function transact((bytes proof,bytes32 root,bytes32[2] inputNullifiers,bytes32[2] outputCommitments,uint256 publicAmount,bytes32 extDataHash) args,(address recipient,int256 extAmount,address relayer,uint256 fee,bytes encryptedOutput1,bytes encryptedOutput2) extData,address asset)",
+  "function transact((bytes proof,bytes32 root,bytes32[2] inputNullifiers,bytes32[2] outputCommitments,uint256 publicAmount,bytes32 extDataHash,uint256 newLabel,uint256 aspRoot,uint256 exitLabel) args,(address recipient,int256 extAmount,address relayer,uint256 fee,bytes encryptedOutput1,bytes encryptedOutput2) extData,address asset)",
   "function isKnownRoot(bytes32 root) view returns (bool)",
   "function isSpent(bytes32 nullifier) view returns (bool)",
   "function hashExtData((address recipient,int256 extAmount,address relayer,uint256 fee,bytes encryptedOutput1,bytes encryptedOutput2) extData,address asset) view returns (bytes32)",
@@ -37,6 +37,9 @@ const POOL_ABI = [
   "error BadRecipient()",
   "error FeeOnTransferNotSupported()",
   "error IsPaused()",
+  "error BadLabel()",
+  "error NotApproved()",
+  "error BadExit()",
 ];
 
 class Relayer {
@@ -80,6 +83,7 @@ class Relayer {
     const minFee = this.minFees.get(asset);
     if (minFee === undefined) throw new RelayError("this relayer doesn't handle that asset");
     if (extData.extAmount > 0n) throw new RelayError("deposits can't be relayed; send them from your own wallet");
+    if (args.exitLabel !== 0n) throw new RelayError("exits go back to the depositing wallet with no fee, so send them from that wallet");
     if (extData.fee < minFee) throw new RelayError(`fee too low: minimum is ${minFee} raw units`);
     if (ethers.getAddress(extData.relayer) !== me) throw new RelayError(`extData.relayer must be ${me}`);
     if (extData.extAmount < 0n && extData.recipient === ethers.ZeroAddress) throw new RelayError("withdrawal needs a recipient");
@@ -216,6 +220,9 @@ function parseRequest(body) {
     outputCommitments: pair(args.outputCommitments, "outputCommitments"),
     publicAmount: int(args.publicAmount, "publicAmount"),
     extDataHash: b32(args.extDataHash, "extDataHash"),
+    newLabel: int(args.newLabel ?? 0, "newLabel"),
+    aspRoot: int(args.aspRoot ?? 0, "aspRoot"),
+    exitLabel: int(args.exitLabel ?? 0, "exitLabel"),
   };
   const parsedExt = {
     recipient: addr(extData.recipient, "recipient"),
