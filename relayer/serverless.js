@@ -6,12 +6,22 @@
 //   RELAYER_KEY    private key of the relayer wallet (pays gas, receives fees)
 //   RPC_URL        e.g. https://rpc.testnet.chain.robinhood.com
 //   CHAIN_ID       e.g. 46630
-//   POOL           VesperPool address
+//   POOL           optional, ignored: the pool comes from deployments/<DEPLOYMENT_NAME>.json,
+//                  the same file the web app is built from, so the two always agree
+//   DEPLOYMENT_NAME optional, default "robinhoodTestnet"
 //   RELAYER_FEES   "0xToken:0.1,0xOther:0.2"  minimum fee per asset, whole tokens
 const { ethers } = require("ethers");
 const { Relayer, RelayError } = require("./relayer");
 
 const MAX_BODY = 16 * 1024;
+const DEPLOYMENTS = { robinhoodTestnet: require("../deployments/robinhoodTestnet.json") };
+
+/** The pool this deployment serves (from the deployment file, not an env var). */
+function deployedPool(env = process.env) {
+  const dep = DEPLOYMENTS[(env.DEPLOYMENT_NAME || "robinhoodTestnet").trim()];
+  if (!dep) throw new RelayError("relayer misconfigured: DEPLOYMENT_NAME is unknown", 503);
+  return dep;
+}
 
 let cached;
 
@@ -22,7 +32,7 @@ const clean = (v) => String(v).trim().replace(/^["']+|["']+$/g, "").trim();
 // contents), so a misconfiguration shows up as a clear message instead of "internal error".
 function relayerFromEnv(env = process.env) {
   if (cached) return cached;
-  const names = ["RELAYER_KEY", "RPC_URL", "CHAIN_ID", "POOL", "RELAYER_FEES"];
+  const names = ["RELAYER_KEY", "RPC_URL", "CHAIN_ID", "RELAYER_FEES"];
   const v = Object.fromEntries(names.map((k) => [k, env[k] === undefined ? "" : clean(env[k])]));
   const missing = names.filter((k) => !v[k]);
   if (missing.length) throw new RelayError(`relayer not configured (missing ${missing.join(", ")})`, 503);
@@ -33,7 +43,8 @@ function relayerFromEnv(env = process.env) {
   if (!/^https?:\/\//.test(v.RPC_URL)) throw bad("RPC_URL", "must start with https://");
   const chainId = Number(v.CHAIN_ID);
   if (!Number.isInteger(chainId) || chainId <= 0) throw bad("CHAIN_ID", "must be a number like 46630");
-  if (!ethers.isAddress(v.POOL)) throw bad("POOL", "must be a 0x address");
+  const dep = deployedPool(env);
+  if (dep.chainId !== chainId) throw bad("CHAIN_ID", `doesn't match the deployment (${dep.chainId})`);
   // "0xToken:0.1,0xOther:0.2". Also accepts a decimal comma ("0,1"), any separator
   // between address and fee (":", space, "=", a look-alike colon) and ";" between entries.
   const minFees = {};
@@ -51,7 +62,7 @@ function relayerFromEnv(env = process.env) {
   if (!Object.keys(minFees).length) throw bad("RELAYER_FEES", "needs at least one 0xTokenAddress:fee");
 
   const provider = new ethers.JsonRpcProvider(v.RPC_URL, chainId, { staticNetwork: true });
-  cached = new Relayer({ signer: new ethers.Wallet(key, provider), pool: ethers.getAddress(v.POOL), minFees });
+  cached = new Relayer({ signer: new ethers.Wallet(key, provider), pool: ethers.getAddress(dep.pool), minFees });
   return cached;
 }
 
@@ -126,4 +137,4 @@ function createHandlers(getRelayer = relayerFromEnv) {
   };
 }
 
-module.exports = { createHandlers, relayerFromEnv };
+module.exports = { createHandlers, relayerFromEnv, deployedPool };

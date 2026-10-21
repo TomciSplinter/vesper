@@ -7,7 +7,7 @@ module.exports = async (req, res) => {
   res.setHeader("cache-control", "no-store");
   res.setHeader("access-control-allow-origin", "*");
   const present = Object.fromEntries(
-    ["RELAYER_KEY", "RPC_URL", "CHAIN_ID", "POOL", "RELAYER_FEES"].map((k) => [k, !!process.env[k]])
+    ["RELAYER_KEY", "RPC_URL", "CHAIN_ID", "RELAYER_FEES"].map((k) => [k, !!process.env[k]])
   );
   try {
     const info = await relayerFromEnv().info();

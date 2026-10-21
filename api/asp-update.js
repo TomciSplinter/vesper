@@ -18,9 +18,6 @@ module.exports = async (req, res) => {
     const key = (process.env.ASP_KEY || process.env.RELAYER_KEY || "").trim().replace(/^["']|["']$/g, "");
     const dep = deployments[process.env.DEPLOYMENT_NAME || "robinhoodTestnet"];
     if (!key || !process.env.RPC_URL) throw new Error("approvals not configured");
-    if (process.env.POOL && ethers.getAddress(process.env.POOL.trim()) !== ethers.getAddress(dep.pool)) {
-      throw new Error("POOL setting doesn't match the deployment file");
-    }
     await initPoseidon();
     const provider = new ethers.JsonRpcProvider(process.env.RPC_URL.trim(), dep.chainId, { staticNetwork: true });
     const pool = new ethers.Contract(

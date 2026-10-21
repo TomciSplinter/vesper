@@ -78,6 +78,8 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 - New testnet pool `0x0c350E68C861b01E4Ac7bbf895C3e0f0e8b7f424` (verifier `0x2fc39a50496bFF439b959589ad0D00F406db8b86`, deploy block 140286311), same vTSLA. `aspPostman` = relayer wallet `0x6aEB…d912`. Previous pool `0x163B…3957` abandoned.
 - Open questions for the real thing: who runs the screener and with which lists, approval delay, appeals, and whether the screener should also cover deposits. The recipient of unapproved money can only exit it to the original depositor; the app should warn about this before accepting.
 
+- The Vercel relayer now takes the pool from `deployments/robinhoodTestnet.json` (same as the app); the `POOL` env var is ignored. New pools only need a push.
+
 ## Next steps
 1. ~~`npm install`, install circom, `npm run build`, `npm test`; fix whatever fails.~~ Done.
 2. Deploy to Robinhood Chain testnet with a real stock token address.

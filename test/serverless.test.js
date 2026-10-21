@@ -95,14 +95,13 @@ describe("Serverless relayer (Vercel functions)", function () {
       RELAYER_KEY: "0x" + "11".repeat(32),
       RPC_URL: "https://rpc.example",
       CHAIN_ID: "46630",
-      POOL: "0x163BDa760077E965beB13570222C2267aD2A3957",
       RELAYER_FEES: "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112:0.1",
     };
     expect(() => relayerFromEnv({ ...ok, RELAYER_KEY: "0x1234" })).to.throw("RELAYER_KEY must be");
     expect(() => relayerFromEnv({ ...ok, CHAIN_ID: "abc" })).to.throw("CHAIN_ID must be");
     expect(() => relayerFromEnv({ ...ok, RELAYER_FEES: "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112" })).to.throw("RELAYER_FEES");
     // Stray quotes and spaces around a pasted value are fine.
-    const r = relayerFromEnv({ ...ok, RELAYER_KEY: ` "${ok.RELAYER_KEY}" `, POOL: `'${ok.POOL}'` });
+    const r = relayerFromEnv({ ...ok, RELAYER_KEY: ` "${ok.RELAYER_KEY}" `, RPC_URL: ` '${ok.RPC_URL}' ` });
     expect(r).to.be.ok;
   });
 });
