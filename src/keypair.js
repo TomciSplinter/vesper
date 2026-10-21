@@ -118,4 +118,18 @@ class Keypair {
   }
 }
 
-module.exports = { Keypair, SIGN_IN_MESSAGE, NK_DOMAIN };
+/**
+ * EIP-712 sign-in request (self-audit F11). Wallets show it as a structured "Vesper"
+ * request for one chain, which is harder to phish than a free-text message, and the
+ * chain id keeps testnet and mainnet accounts separate. The signature IS the spend
+ * key's seed: anyone who gets it can spend, so only sign it on the real Vesper app.
+ */
+function signInTypedData(chainId) {
+  return {
+    domain: { name: "Vesper", version: "1", chainId: Number(chainId) },
+    types: { VesperAccount: [{ name: "purpose", type: "string" }] },
+    value: { purpose: "Create my private Vesper account key. Only sign this on the real Vesper app." },
+  };
+}
+
+module.exports = { Keypair, SIGN_IN_MESSAGE, NK_DOMAIN, signInTypedData };

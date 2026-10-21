@@ -73,7 +73,11 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     mapping(uint256 => address) public depositorOf; // label => wallet that made the deposit
     address public aspPostman; // publishes the association set (approved deposit labels)
     uint256 public aspRoot; // current association-set root
-    uint256 public previousAspRoot; // still accepted, so proofs made just before an update work
+    /// A replaced association-set root stays valid this long, so (a) proofs made just
+    /// before an update still work and (b) anyone whose deposit is dropped from the
+    /// set gets a week to withdraw privately before the removal bites (self-audit F3/F4).
+    uint256 public constant ASP_GRACE = 7 days;
+    mapping(uint256 => uint256) public aspRootReplacedAt;
     bool public complianceRequired = true; // payouts must prove an approved label (or exit)
 
     event NewCommitment(bytes32 indexed commitment, uint256 index, bytes encryptedOutput);
@@ -82,7 +86,9 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     event DepositsPaused(bool paused);
     event GuardianSet(address indexed guardian);
     event NewDeposit(uint256 indexed label, address indexed depositor, address indexed asset, uint256 amount);
-    event AssociationSetUpdated(uint256 root, uint256[] labels, string uri);
+    /// The set's labels in order = all `added` so far, minus `removed`, in the order
+    /// they were added. Wallets replay these events to rebuild the tree and check `root`.
+    event AssociationSetUpdated(uint256 root, uint256[] added, uint256[] removed, string uri);
     event AspPostmanSet(address indexed postman);
     event ChangeScheduled(bytes32 indexed id, bytes data, uint256 executableAt);
     event ChangeCancelled(bytes32 indexed id);
@@ -111,6 +117,8 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     error OnlySelf();
     error ZeroAddress();
     error LengthMismatch();
+    error TreeFull();
+    error FeeOnDeposit();
 
     /// Initial settings are set here, at deploy time, so launch doesn't wait for the
     /// admin delay. Every later change that loosens a rule waits ADMIN_DELAY.
@@ -173,7 +181,10 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     }
 
     function isKnownAspRoot(uint256 root) public view returns (bool) {
-        return root != 0 && (root == aspRoot || root == previousAspRoot);
+        if (root == 0) return false;
+        if (root == aspRoot) return true;
+        uint256 t = aspRootReplacedAt[root];
+        return t != 0 && block.timestamp < t + ASP_GRACE;
     }
 
     function calculatePublicAmount(int256 extAmount, uint256 fee) public pure returns (uint256) {
@@ -276,14 +287,18 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     }
 
     /// Publishes a new association set: the Poseidon Merkle root of the approved
-    /// labels, in order. `labels` is emitted so wallets can rebuild the tree and check
-    /// the root themselves; `uri` can point at the screening policy or report.
-    function updateAssociationSet(uint256 root, uint256[] calldata labels, string calldata uri) external {
+    /// labels, plus only what CHANGED since the last update (so the cost doesn't grow
+    /// with the number of deposits). Wallets replay all updates to rebuild the list and
+    /// check the root themselves; `uri` can point at the screening policy or report.
+    function updateAssociationSet(uint256 root, uint256[] calldata added, uint256[] calldata removed, string calldata uri)
+        external
+    {
         if (msg.sender != aspPostman) revert NotPostman();
         if (root == 0 || root >= FIELD_SIZE) revert NotApproved();
-        previousAspRoot = aspRoot;
+        if (aspRoot != 0 && aspRoot != root) aspRootReplacedAt[aspRoot] = block.timestamp;
+        aspRootReplacedAt[root] = 0;
         aspRoot = root;
-        emit AssociationSetUpdated(root, labels, uri);
+        emit AssociationSetUpdated(root, added, removed, uri);
     }
 
     /// Emergency brake on NEW deposits only (instant both ways: it only returns to
@@ -319,9 +334,16 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
             IERC20(asset).safeTransfer(extData.relayer, extData.fee);
         }
 
-        uint32 index = _insert(args.outputCommitments[0], args.outputCommitments[1]);
-        emit NewCommitment(args.outputCommitments[0], index, extData.encryptedOutput1);
-        emit NewCommitment(args.outputCommitments[1], index + 1, extData.encryptedOutput2);
+        if (isFull()) {
+            // The tree is full: no new notes can be added, but money must never be
+            // stuck (self-audit F1). Withdrawals and exits still go through and their
+            // outputs are NOT stored, so wallets withdraw whole notes, with no change.
+            if (extData.extAmount >= 0) revert TreeFull();
+        } else {
+            uint32 index = _insert(args.outputCommitments[0], args.outputCommitments[1]);
+            emit NewCommitment(args.outputCommitments[0], index, extData.encryptedOutput1);
+            emit NewCommitment(args.outputCommitments[1], index + 1, extData.encryptedOutput2);
+        }
         for (uint256 i = 0; i < 2; i++) {
             emit NewNullifier(args.inputNullifiers[i]);
         }
@@ -329,7 +351,9 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
 
     function _checkCompliance(Proof calldata args, ExtData calldata extData, address asset) internal {
         if (extData.extAmount > 0) {
-            // Deposit: a fresh label, recorded against the depositing wallet.
+            // Deposit: a fresh label, recorded against the depositing wallet. No fee:
+            // a deposit must not pay anything out of the pool (self-audit F5).
+            if (extData.fee != 0) revert FeeOnDeposit();
             if (args.newLabel != nextDepositLabel(msg.sender)) revert BadLabel();
             if (args.aspRoot != 0 || args.exitLabel != 0) revert BadLabel();
             depositNonce[msg.sender]++;

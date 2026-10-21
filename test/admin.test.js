@@ -61,7 +61,7 @@ describe("Admin changes: 3-day notice", function () {
     for (const data of [
       ctx.enc("renounceOwnership", []),
       ctx.enc("setDepositsPaused", [true]),
-      ctx.enc("updateAssociationSet", [1, [], ""]),
+      ctx.enc("updateAssociationSet", [1, [], [], ""]),
       "0x12",
     ]) {
       await expect(ctx.pool.scheduleChange(data)).to.be.revertedWithCustomError(ctx.pool, "NotAllowed");

@@ -10,7 +10,7 @@ const e = (n) => ethers.parseEther(String(n));
 const fmt = (n) => ethers.formatEther(n);
 
 async function main() {
-  if (network.name === "robinhood") throw new Error("Testnets only.");
+  if ((await ethers.provider.getNetwork()).chainId === 4663n) throw new Error("Testnets only.");
   const relayerUrl = process.env.RELAYER_URL || "http://localhost:8787";
   const dep = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "deployments", `${network.name}.json`)));
   await initPoseidon();

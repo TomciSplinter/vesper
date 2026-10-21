@@ -76,8 +76,9 @@ async function main() {
     base.pool,
     [
       "event NewDeposit(uint256 indexed label, address indexed depositor, address indexed asset, uint256 amount)",
+        "event AssociationSetUpdated(uint256 root, uint256[] added, uint256[] removed, string uri)",
       "function aspRoot() view returns (uint256)",
-      "function updateAssociationSet(uint256 root, uint256[] labels, string uri)",
+      "function updateAssociationSet(uint256 root, uint256[] added, uint256[] removed, string uri)",
     ],
     postman
   );
@@ -114,6 +115,11 @@ async function main() {
       case "wallet_switchEthereumChain":
       case "wallet_addEthereumChain":
         return null;
+      case "eth_signTypedData_v4": {
+        const t = JSON.parse(params[1]);
+        delete t.types.EIP712Domain;
+        return wallet.signTypedData(t.domain, t.types, t.message);
+      }
       case "personal_sign":
         return wallet.signMessage(ethers.getBytes(params[0]));
       case "eth_sendTransaction": {

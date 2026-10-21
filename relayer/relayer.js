@@ -51,12 +51,17 @@ class Relayer {
    *        Only listed assets are relayed. (v0.1: fixed fees; a price feed comes later.)
    * @param {number} [opts.confirmations=1]
    */
-  constructor({ signer, pool, minFees, confirmations = 1 }) {
+  /**
+   * @param {boolean} [opts.sponsorExits=false]  relay exits (unapproved money going back
+   *        to its depositor) for free, so the holder needn't use a wallet of their own
+   */
+  constructor({ signer, pool, minFees, confirmations = 1, sponsorExits = false }) {
     if (!signer || !pool || !minFees) throw new Error("signer, pool and minFees are required");
     this.signer = signer;
     this.pool = new ethers.Contract(pool, POOL_ABI, signer);
     this.minFees = new Map(Object.entries(minFees).map(([a, f]) => [ethers.getAddress(a), BigInt(f)]));
     this.confirmations = confirmations;
+    this.sponsorExits = sponsorExits;
     this.jobs = new Map(); // id -> { status, txHash?, error? }
     this.pendingNullifiers = new Set();
     this.queue = Promise.resolve(); // one submission at a time keeps nonces simple
@@ -71,6 +76,7 @@ class Relayer {
       pool: await this.pool.getAddress(),
       chainId: Number((await this.signer.provider.getNetwork()).chainId),
       minFees: fees,
+      sponsorsExits: this.sponsorExits,
     };
   }
 
@@ -83,9 +89,14 @@ class Relayer {
     const minFee = this.minFees.get(asset);
     if (minFee === undefined) throw new RelayError("this relayer doesn't handle that asset");
     if (extData.extAmount > 0n) throw new RelayError("deposits can't be relayed; send them from your own wallet");
-    if (args.exitLabel !== 0n) throw new RelayError("exits go back to the depositing wallet with no fee, so send them from that wallet");
-    if (extData.fee < minFee) throw new RelayError(`fee too low: minimum is ${minFee} raw units`);
-    if (ethers.getAddress(extData.relayer) !== me) throw new RelayError(`extData.relayer must be ${me}`);
+    if (args.exitLabel !== 0n) {
+      // Exits pay no fee (the contract enforces it); a relayer may sponsor the gas.
+      if (!this.sponsorExits) throw new RelayError("this relayer doesn't sponsor exits; send it from your own wallet");
+      if (extData.fee !== 0n) throw new RelayError("exits can't pay a fee");
+    } else {
+      if (extData.fee < minFee) throw new RelayError(`fee too low: minimum is ${minFee} raw units`);
+      if (ethers.getAddress(extData.relayer) !== me) throw new RelayError(`extData.relayer must be ${me}`);
+    }
     if (extData.extAmount < 0n && extData.recipient === ethers.ZeroAddress) throw new RelayError("withdrawal needs a recipient");
 
     for (const n of args.inputNullifiers) {

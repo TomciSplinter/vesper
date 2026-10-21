@@ -55,10 +55,17 @@ const src = require("../src");
 /** Publishes an association set approving every deposit so far (except `except` labels). */
 async function approveAll(ctx, { except = [] } = {}) {
   const skip = new Set(except.map(BigInt));
-  const labels = (await src.fetchDeposits(ctx.pool)).map((d) => d.label).filter((l) => !skip.has(l));
-  if (!labels.length) return null;
-  const root = src.associationTree(labels).root();
-  await (await ctx.pool.connect(ctx.owner).updateAssociationSet(root, labels, "test")).wait();
+  const wanted = (await src.fetchDeposits(ctx.pool)).map((d) => d.label).filter((l) => !skip.has(l));
+  const { queryAll } = require("../src/events");
+  const snaps = src.replayAssociationSet(await queryAll(ctx.pool, ctx.pool.filters.AssociationSetUpdated(), 0));
+  const published = snaps.length ? snaps[snaps.length - 1].labels : [];
+  const wantedSet = new Set(wanted), publishedSet = new Set(published);
+  const removed = published.filter((l) => !wantedSet.has(l));
+  const added = wanted.filter((l) => !publishedSet.has(l));
+  const next = [...published.filter((l) => wantedSet.has(l)), ...added];
+  if (!added.length && !removed.length) return null;
+  const root = src.associationTree(next).root();
+  await (await ctx.pool.connect(ctx.owner).updateAssociationSet(root, added, removed, "test")).wait();
   return root;
 }
 

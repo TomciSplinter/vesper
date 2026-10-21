@@ -1,18 +1,24 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { initPoseidon, Keypair, Utxo, SIGN_IN_MESSAGE, selectNotes } = require("../src");
+const { initPoseidon, Keypair, Utxo, signInTypedData, selectNotes } = require("../src");
 
 describe("Client helpers", function () {
   before(initPoseidon);
   const asset = "0x00000000000000000000000000000000000000aa";
 
   it("the same wallet signature always unlocks the same Vesper account", async function () {
+    const sign = (w, chainId) => {
+      const t = signInTypedData(chainId);
+      return w.signTypedData(t.domain, t.types, t.value);
+    };
     const wallet = ethers.Wallet.createRandom();
-    const a = Keypair.fromSignature(await wallet.signMessage(SIGN_IN_MESSAGE));
-    const b = Keypair.fromSignature(await wallet.signMessage(SIGN_IN_MESSAGE));
-    const other = Keypair.fromSignature(await ethers.Wallet.createRandom().signMessage(SIGN_IN_MESSAGE));
+    const a = Keypair.fromSignature(await sign(wallet, 46630));
+    const b = Keypair.fromSignature(await sign(wallet, 46630));
+    const other = Keypair.fromSignature(await sign(ethers.Wallet.createRandom(), 46630));
+    const mainnet = Keypair.fromSignature(await sign(wallet, 4663));
     expect(a.address()).to.equal(b.address());
     expect(a.address()).to.not.equal(other.address());
+    expect(a.address()).to.not.equal(mainnet.address()); // testnet and mainnet accounts are separate
   });
 
   it("an exported view key decrypts notes and computes the owner's nullifiers, but can't spend", function () {

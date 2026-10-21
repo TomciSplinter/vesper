@@ -21,5 +21,9 @@
   "relayers": [
     "/api"
   ],
-  "aspUpdateUrl": "/api/asp-update"
+  "aspUpdateUrl": "/api/asp-update",
+  "maxRelayerFees": {
+    "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E": "0.05",
+    "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112": "0.5"
+  }
 }

@@ -64,7 +64,7 @@ function relayerFromEnv(env = process.env) {
   if (!Object.keys(minFees).length) throw bad("RELAYER_FEES", "needs at least one 0xTokenAddress:fee");
 
   const provider = new ethers.JsonRpcProvider(v.RPC_URL, chainId, { staticNetwork: true });
-  cached = new Relayer({ signer: new ethers.Wallet(key, provider), pool: ethers.getAddress(dep.pool), minFees });
+  cached = new Relayer({ signer: new ethers.Wallet(key, provider), pool: ethers.getAddress(dep.pool), minFees, sponsorExits: !!dep.sponsorExits });
   return cached;
 }
 

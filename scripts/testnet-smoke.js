@@ -11,7 +11,7 @@ const e = (n) => ethers.parseEther(String(n));
 const fmt = (n) => ethers.formatEther(n);
 
 async function main() {
-  if (network.name === "robinhood") throw new Error("Smoke test is for testnets only.");
+  if ((await ethers.provider.getNetwork()).chainId === 4663n) throw new Error("Smoke test is for testnets only.");
   const dep = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "deployments", `${network.name}.json`)));
   if (!dep.mockToken) throw new Error("No mock token in this deployment.");
   await initPoseidon();

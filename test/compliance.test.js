@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const snarkjs = require("snarkjs");
 const path = require("path");
-const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
+const { loadFixture, time } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const src = require("../src");
 const { Keypair, Utxo, buildTree, scanNotes, fetchAssociationSet, associationTree, NotApprovedError } = src;
 const { deployVesper, approveAll, adminChange } = require("./helpers");
@@ -145,17 +145,42 @@ describe("Compliance (association sets)", function () {
     await expect(ctx.pool.connect(ctx.bob).transact(p.args, p.extData, ctx.tslaAddr)).to.be.revertedWithCustomError(ctx.pool, "BadLabel");
   });
 
-  it("a proof made just before the list updates still works (previous root accepted)", async function () {
+  it("a proof made just before the list updates still works (replaced roots stay valid for the grace period)", async function () {
     const ctx = await loadFixture(setup);
     const [note] = await scanNotes(ctx.pool, ctx.aliceKp);
     const p = await ctx.prep({ inputs: [note], recipient: ctx.bob.address, asp: ctx.asp });
     await approveAll(ctx); // now Carol is approved too: new root
+    await approveAll(ctx, { except: [ctx.carolLabel] }); // and removed again: another new root
     await ctx.pool.transact(p.args, p.extData, ctx.tslaAddr);
+  });
+
+  it("a removal from the list only bites after 7 days, so the holder can still withdraw privately", async function () {
+    const ctx = await loadFixture(setup);
+    await approveAll(ctx, { except: [ctx.aliceLabel, ctx.carolLabel] }); // Alice's deposit dropped
+    const asp = await fetchAssociationSet(ctx.pool);
+    expect(asp.has(ctx.aliceLabel)).to.equal(false);
+    const [note] = await scanNotes(ctx.pool, ctx.aliceKp);
+    // Day 6: the wallet finds Alice in the still-valid older set and withdraws privately.
+    await time.increase(6 * 24 * 3600);
+    const fresh = ethers.Wallet.createRandom().address;
+    const p = await ctx.prep({ inputs: [note], recipient: fresh, asp });
+    await ctx.pool.transact(p.args, p.extData, ctx.tslaAddr);
+    expect(await ctx.tsla.balanceOf(fresh)).to.equal(e(100));
+  });
+
+  it("after the grace period, a removed deposit can no longer withdraw privately", async function () {
+    const ctx = await loadFixture(setup);
+    const [note] = await scanNotes(ctx.pool, ctx.aliceKp);
+    const early = await ctx.prep({ inputs: [note], recipient: ctx.bob.address, asp: ctx.asp }); // proof against the old root
+    await approveAll(ctx, { except: [ctx.aliceLabel, ctx.carolLabel] });
+    await time.increase(7 * 24 * 3600 + 1);
+    await expect(ctx.pool.transact(early.args, early.extData, ctx.tslaAddr)).to.be.revertedWithCustomError(ctx.pool, "NotApproved");
+    await expect(ctx.prep({ inputs: [note], recipient: ctx.bob.address, asp: await fetchAssociationSet(ctx.pool) })).to.be.rejectedWith(NotApprovedError);
   });
 
   it("only the postman publishes the list; only the owner changes the rules", async function () {
     const ctx = await loadFixture(setup);
-    await expect(ctx.pool.connect(ctx.bob).updateAssociationSet(1, [], "")).to.be.revertedWithCustomError(ctx.pool, "NotPostman");
+    await expect(ctx.pool.connect(ctx.bob).updateAssociationSet(1, [], [], "")).to.be.revertedWithCustomError(ctx.pool, "NotPostman");
     const off = ctx.pool.interface.encodeFunctionData("applyComplianceRequired", [false]);
     await expect(ctx.pool.connect(ctx.bob).scheduleChange(off)).to.be.revertedWithCustomError(ctx.pool, "OwnableUnauthorizedAccount");
     // With compliance switched off, a withdrawal without a proof of approval is allowed.
@@ -167,7 +192,7 @@ describe("Compliance (association sets)", function () {
 
   it("wallets reject a published list that doesn't match its root", async function () {
     const ctx = await loadFixture(setup);
-    await ctx.pool.updateAssociationSet(12345n, [ctx.carolLabel], "lying list");
+    await ctx.pool.updateAssociationSet(12345n, [ctx.carolLabel], [], "lying list");
     await expect(fetchAssociationSet(ctx.pool)).to.be.rejectedWith("doesn't match its root");
   });
 });

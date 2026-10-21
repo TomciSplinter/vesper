@@ -4,7 +4,7 @@ import {
   initPoseidon,
   Keypair,
   Utxo,
-  SIGN_IN_MESSAGE,
+  signInTypedData,
   prepareTransaction,
   buildTree,
   scanNotes,
@@ -16,12 +16,17 @@ import {
 
 const POOL_ABI = [
   "event NewCommitment(bytes32 indexed commitment, uint256 index, bytes encryptedOutput)",
-  "event AssociationSetUpdated(uint256 root, uint256[] labels, string uri)",
+  "event AssociationSetUpdated(uint256 root, uint256[] added, uint256[] removed, string uri)",
   "function transact((bytes proof,bytes32 root,bytes32[2] inputNullifiers,bytes32[2] outputCommitments,uint256 publicAmount,bytes32 extDataHash,uint256 newLabel,uint256 aspRoot,uint256 exitLabel) args,(address recipient,int256 extAmount,address relayer,uint256 fee,bytes encryptedOutput1,bytes encryptedOutput2) extData,address asset)",
   "function nextDepositLabel(address depositor) view returns (uint256)",
   "function depositorOf(uint256 label) view returns (address)",
   "function aspRoot() view returns (uint256)",
+  "event NewNullifier(bytes32 indexed nullifier)",
   "function isSpent(bytes32 nullifier) view returns (bool)",
+  "function isFull() view returns (bool)",
+  "function isKnownAspRoot(uint256 root) view returns (bool)",
+  "function aspRootReplacedAt(uint256 root) view returns (uint256)",
+  "function ASP_GRACE() view returns (uint256)",
   "function assetConfig(address) view returns (bool depositsEnabled, uint256 maxDepositAmount)",
   "function depositsPaused() view returns (bool)",
 ];
@@ -106,11 +111,24 @@ export class Vesper {
     return this.account;
   }
 
-  /** One free signature turns the wallet into its Vesper account. */
+  /**
+   * One free signature turns the wallet into its Vesper account. If this wallet
+   * produced a DIFFERENT account here before, its wallet doesn't sign the same way
+   * twice and funds could look lost: warn instead of silently switching accounts.
+   */
   async unlock() {
     if (!this.signer) await this.connect();
-    const sig = await this.signer.signMessage(SIGN_IN_MESSAGE);
+    const { domain, types, value } = signInTypedData(this.config.chainId);
+    const sig = await this.signer.signTypedData(domain, types, value);
     this.keypair = Keypair.fromSignature(sig);
+    this.accountWarning = null;
+    const key = `vesper:account:${this.config.chainId}:${this.account.toLowerCase()}`;
+    try {
+      const before = localStorage.getItem(key);
+      if (before && before !== this.keypair.address()) {
+        this.accountWarning = "This wallet opened a different Vesper account last time. Your wallet may not sign the same way twice. Don't deposit until this is sorted out.";
+      } else if (!before) localStorage.setItem(key, this.keypair.address());
+    } catch {}
     return this.keypair;
   }
 
@@ -144,6 +162,7 @@ export class Vesper {
       scanNotes(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 }),
       this.associationSet().catch(() => null),
     ]);
+    const status = await this._labelStatus(asp, notes.map((n) => n.label));
     const byAsset = [];
     for (const a of this.assets) {
       const mine = notes.filter((n) => n.asset === BigInt(a.address));
@@ -153,11 +172,45 @@ export class Vesper {
         uiMultiplier = await token.uiMultiplier();
       } catch {}
       const walletBalance = this.account && !this.viewOnly ? await token.balanceOf(this.account) : null;
-      const total = mine.reduce((s, n) => s + n.amount, 0n);
-      const approved = mine.filter((n) => asp?.has(n.label)).reduce((s, n) => s + n.amount, 0n);
-      byAsset.push({ asset: a, total, approved, pending: total - approved, notes: mine, uiMultiplier, walletBalance });
+      const total = sum(mine);
+      const of = (st) => mine.filter((n) => status.get(n.label)?.status === st);
+      const expiringNotes = of("expiring");
+      const expiringBy = expiringNotes.length ? Math.min(...expiringNotes.map((n) => status.get(n.label).until)) : null;
+      byAsset.push({
+        asset: a,
+        total,
+        approved: sum(of("approved")) + sum(expiringNotes), // can be withdrawn privately now
+        expiring: sum(expiringNotes), // removed from the list: withdraw privately before expiringBy
+        expiringBy,
+        pending: sum(of("pending")),
+        notes: mine,
+        uiMultiplier,
+        walletBalance,
+      });
     }
     return { notes, byAsset, asp };
+  }
+
+  /**
+   * label -> { status: "approved" | "expiring" | "pending", until? (ms) }.
+   * expiring = dropped from the current list, but still in a set the pool accepts
+   * for its grace period, so it can still be withdrawn privately until `until`.
+   */
+  async _labelStatus(asp, labels) {
+    const out = new Map();
+    let grace = null;
+    for (const l of new Set(labels)) {
+      if (asp?.has(l)) out.set(l, { status: "approved" });
+      else {
+        const older = asp ? await asp.forLabel(l) : null;
+        if (older) {
+          grace ??= Number(await this.pool.ASP_GRACE());
+          const replaced = Number(await this.pool.aspRootReplacedAt(older.root));
+          out.set(l, { status: "expiring", until: (replaced + grace) * 1000 });
+        } else out.set(l, { status: "pending" });
+      }
+    }
+    return out;
   }
 
   async relayer() {
@@ -284,18 +337,26 @@ export class Vesper {
    */
   async returnToDepositor(assetAddr, onStep = () => {}) {
     this._needSpender();
-    if (!this.signer) throw new Error("Connect a wallet to do this.");
     const asset = getAddress(assetAddr);
     const asp = await this.associationSet();
-    const notes = (await this._notes(asset)).filter((n) => !asp?.has(n.label));
+    const all = await this._notes(asset);
+    const status = await this._labelStatus(asp, all.map((n) => n.label));
+    const notes = all.filter((n) => status.get(n.label).status === "pending");
     if (!notes.length) throw new Error("Nothing is waiting for approval.");
     const groups = new Map();
     for (const n of notes) groups.set(n.label, [...(groups.get(n.label) || []), n]);
     const [label, group] = [...groups.entries()].sort((a, b) => (sum(b[1]) > sum(a[1]) ? 1 : -1))[0];
     const inputs = [...group].sort((a, b) => (a.amount < b.amount ? 1 : -1)).slice(0, 2);
     const depositor = await this.pool.depositorOf(label);
-    onStep("Creating your proof (this can take a little while)…");
+    onStep(`Creating your proof to return it to ${depositor.slice(0, 6)}…${depositor.slice(-4)}…`);
+    // A relayer that sponsors exits sends it for free, so no wallet of yours appears.
+    let relayer = null;
+    try {
+      relayer = await this.relayer();
+    } catch {}
     const prepared = await this._prepare({ asset, inputs, recipient: depositor, exit: true });
+    if (relayer?.sponsorsExits) return this._sendRelayed(prepared, asset, relayer.url, onStep);
+    if (!this.signer) throw new Error("Connect a wallet to do this.");
     return this._sendOwn(prepared, asset, onStep);
   }
 
@@ -334,6 +395,11 @@ export class Vesper {
     }
     const r = await this.relayerFee(asset);
     if (!r) throw new Error("No relayer is available for this stock. Turn off the relayer to send it from your own wallet.");
+    // Never pay a relayer more than the app's own limit, whatever it asks (self-audit F9).
+    const cap = this.config.maxRelayerFees?.[getAddress(asset)];
+    if (cap !== undefined && r.fee > parseUnits(String(cap), DECIMALS)) {
+      throw new Error(`The relayer asks ${fmt(r.fee)}, more than this app's limit of ${cap}. Turn off the relayer or try later.`);
+    }
     return r;
   }
 
@@ -343,7 +409,8 @@ export class Vesper {
 
   async _pickNotes(asset, needed, { asp = null, approvedOnly = false } = {}) {
     const all = await this._notes(asset);
-    const usable = approvedOnly ? all.filter((n) => asp?.has(n.label)) : all;
+    const status = await this._labelStatus(asp, all.map((n) => n.label));
+    const usable = approvedOnly ? all.filter((n) => status.get(n.label).status !== "pending") : all;
     const total = sum(all);
     const usableTotal = sum(usable);
     if (total < needed) throw new Error(`Not enough private balance: you need ${fmt(needed)} including fees, and have ${fmt(total)}.`);
@@ -353,7 +420,9 @@ export class Vesper {
           "You can wait, send it privately without the relayer, or return it to the wallet that deposited it."
       );
     }
-    const picked = selectNotes(usable, needed, (l) => !!asp?.has(l));
+    // Approved money (including money in its grace period) before anything else.
+    const rank = (l) => ({ expiring: 2, approved: 1 })[status.get(l)?.status] || 0;
+    const picked = selectNotes(usable, needed, (l) => rank(l) > 0);
     if (!picked) throw new Error("Your balance is split across too many notes (or deposits) for one transaction. Tap “Combine notes” first.");
     return picked;
   }

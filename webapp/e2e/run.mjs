@@ -98,7 +98,7 @@ async function main() {
   await (await token.mint(userAddr, e(500))).wait();
 
   console.log("Starting relayer…");
-  const relayer = new Relayer({ signer: relayerWallet, pool: dep.pool, minFees: { [dep.mockToken]: FEE } });
+  const relayer = new Relayer({ signer: relayerWallet, pool: dep.pool, minFees: { [dep.mockToken]: FEE }, sponsorExits: true });
   const relayerServer = createServer(relayer);
   await new Promise((r) => relayerServer.listen(RELAYER_PORT, "127.0.0.1", r));
 
@@ -108,8 +108,9 @@ async function main() {
     dep.pool,
     [
       "event NewDeposit(uint256 indexed label, address indexed depositor, address indexed asset, uint256 amount)",
+        "event AssociationSetUpdated(uint256 root, uint256[] added, uint256[] removed, string uri)",
       "function aspRoot() view returns (uint256)",
-      "function updateAssociationSet(uint256 root, uint256[] labels, string uri)",
+      "function updateAssociationSet(uint256 root, uint256[] added, uint256[] removed, string uri)",
     ],
     deployer
   );
@@ -139,6 +140,7 @@ async function main() {
     deployBlock: dep.deployBlock,
     assets: [{ address: dep.mockToken, symbol: "vTSLA", name: "vTSLA test token" }],
     relayers: [`http://127.0.0.1:${RELAYER_PORT}`],
+    maxRelayerFees: { [dep.mockToken]: "1" },
     aspUpdateUrl: `http://127.0.0.1:${ASP_PORT}/asp-update`,
   }, null, 2));
   execFileSync("node", [path.join(root, "webapp", "build.mjs"), cfgPath], { cwd: root, stdio: "inherit" });
@@ -162,6 +164,11 @@ async function main() {
       case "wallet_switchEthereumChain":
       case "wallet_addEthereumChain":
         return null;
+      case "eth_signTypedData_v4": {
+        const t = JSON.parse(params[1]);
+        delete t.types.EIP712Domain;
+        return userWallet.signTypedData(t.domain, t.types, t.message);
+      }
       case "personal_sign":
         return userWallet.signMessage(ethers.getBytes(params[0]));
       case "eth_sendTransaction": {
@@ -237,7 +244,7 @@ async function main() {
   const userNonce = await provider.getTransactionCount(userAddr);
   await page.click('[data-testid="submit-send"]');
   await done("send");
-  const pool = new ethers.Contract(dep.pool, ["event NewCommitment(bytes32 indexed commitment, uint256 index, bytes encryptedOutput)", "function isSpent(bytes32) view returns (bool)"], provider);
+  const pool = new ethers.Contract(dep.pool, ["event NewCommitment(bytes32 indexed commitment, uint256 index, bytes encryptedOutput)", "event NewNullifier(bytes32 indexed nullifier)", "function isSpent(bytes32) view returns (bool)"], provider);
   const bobNotes = await scanNotes(pool, bob, { fromBlock: dep.deployBlock });
   check(bobNotes.length === 1 && bobNotes[0].amount === e(30), "Bob's Vesper account received 30 privately");
   check((await privateBalance()) === e(100) - e(30) - FEE, "sender has 69.5 left (0.5 relayer fee)");
@@ -289,9 +296,11 @@ async function main() {
   check(/waiting for approval/.test(await page.textContent('[data-testid="error"]')), "withdrawing more than the approved amount explains the rest is waiting");
   await page.click('[data-testid="close"]');
   await page.screenshot({ path: path.join(shots, "7-waiting.png") });
+  const nonceBeforeReturn = await provider.getTransactionCount(userAddr);
   await page.click('[data-testid="return-to-depositor"]');
   await done("return to depositor");
   check((await token.balanceOf(userAddr)) === e(405), "'Return to depositing wallet' sends the 10 back to the wallet that deposited it");
+  check((await provider.getTransactionCount(userAddr)) === nonceBeforeReturn, "the return was sent by the relayer (sponsored), not the user's wallet");
   check((await privateBalance()) === e(44) && !(await page.$('[data-testid="pending-vTSLA"]')), "nothing left waiting; private balance back to 44");
   blocklist.length = 0;
 
@@ -305,7 +314,8 @@ async function main() {
   await page.click('[data-testid="tab-receive"]');
   await page.screenshot({ path: path.join(shots, "6-receive.png") });
   const shown = (await page.textContent('[data-testid="vesper-address"]')).trim();
-  const expected = Keypair.fromSignature(await userWallet.signMessage(require("../../src").SIGN_IN_MESSAGE)).address();
+  const sit = require("../../src").signInTypedData(31337);
+  const expected = Keypair.fromSignature(await userWallet.signTypedData(sit.domain, sit.types, sit.value)).address();
   check(shown === expected, "Receive tab shows this wallet's Vesper address");
 
   // View key → read-only mode

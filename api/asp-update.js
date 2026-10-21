@@ -24,9 +24,10 @@ module.exports = async (req, res) => {
       dep.pool,
       [
         "event NewDeposit(uint256 indexed label, address indexed depositor, address indexed asset, uint256 amount)",
+        "event AssociationSetUpdated(uint256 root, uint256[] added, uint256[] removed, string uri)",
         "function aspRoot() view returns (uint256)",
         "function aspPostman() view returns (address)",
-        "function updateAssociationSet(uint256 root, uint256[] labels, string uri)",
+        "function updateAssociationSet(uint256 root, uint256[] added, uint256[] removed, string uri)",
       ],
       new ethers.Wallet(key, provider)
     );

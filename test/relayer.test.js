@@ -177,6 +177,29 @@ describe("Relayer", function () {
       expect(results.map((r) => r.status).sort()).to.deep.equal([202, 409]);
     });
 
+    it("an exit, unless the relayer sponsors exits", async function () {
+      const ctx = await withRelayer();
+      // Carol's deposit is never approved: her money can only exit to her own wallet.
+      const carolKp = new Keypair();
+      const d = await prepareTransaction({
+        pool: ctx.pool, asset: ctx.tslaAddr, chainId: ctx.chainId, tree: await buildTree(ctx.pool),
+        outputs: [new Utxo({ amount: e(5), keypair: carolKp, asset: ctx.tslaAddr })], depositor: ctx.carol.address,
+      });
+      await ctx.pool.connect(ctx.carol).transact(d.args, d.extData, ctx.tslaAddr);
+      const [note] = await scanNotes(ctx.pool, carolKp);
+      const exit = await prepareTransaction({
+        pool: ctx.pool, asset: ctx.tslaAddr, chainId: ctx.chainId, tree: await buildTree(ctx.pool),
+        inputs: [note], recipient: ctx.carol.address, exit: true,
+      });
+      await expectRejected(ctx, exit, ctx.tslaAddr, 400, "doesn't sponsor exits");
+      // A sponsoring relayer sends it for free.
+      ctx.relayerService.sponsorExits = true;
+      const before = await ctx.tsla.balanceOf(ctx.carol.address);
+      const job = await relayTransaction(url, exit, ctx.tslaAddr, { pollMs: 50 });
+      expect((await ethers.provider.getTransactionReceipt(job.txHash)).from).to.equal(ctx.relayer.address);
+      expect(await ctx.tsla.balanceOf(ctx.carol.address)).to.equal(before + e(5));
+    });
+
     it("garbage and oversized bodies", async function () {
       await withRelayer();
       expect((await post("not json")).status).to.equal(400);

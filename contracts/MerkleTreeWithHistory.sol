@@ -3,8 +3,10 @@ pragma solidity ^0.8.24;
 
 import {IHasher} from "./interfaces/IHasher.sol";
 
-/// Incremental Poseidon Merkle tree that inserts two leaves at a time and keeps
-/// the last ROOT_HISTORY_SIZE roots so proofs built against a recent root still verify.
+/// Incremental Poseidon Merkle tree that inserts two leaves at a time.
+/// EVERY root it has ever had stays valid for proofs (isRootKnown), so a proof can't
+/// be made stale by others' transactions (self-audit F2). This is safe: an old root
+/// only contains notes that really existed, and nullifiers stop double spends.
 /// Must stay in sync with circuits/merkleproof.circom and src/merkleTree.js.
 abstract contract MerkleTreeWithHistory {
     uint256 public constant FIELD_SIZE =
@@ -19,7 +21,8 @@ abstract contract MerkleTreeWithHistory {
     mapping(uint256 => bytes32) public zeros;
     // filledSubtrees[i] = most recent left node at level i
     mapping(uint256 => bytes32) public filledSubtrees;
-    mapping(uint256 => bytes32) public roots;
+    mapping(uint256 => bytes32) public roots; // recent roots, for getLastRoot
+    mapping(bytes32 => bool) public isRootKnown; // every root ever
 
     uint32 public currentRootIndex;
     uint32 public nextIndex;
@@ -38,6 +41,7 @@ abstract contract MerkleTreeWithHistory {
             filledSubtrees[i] = current;
         }
         roots[0] = zeros[_levels];
+        isRootKnown[zeros[_levels]] = true;
     }
 
     function hashLeftRight(bytes32 left, bytes32 right) public view returns (bytes32) {
@@ -76,20 +80,19 @@ abstract contract MerkleTreeWithHistory {
         uint32 newRootIndex = (currentRootIndex + 1) % ROOT_HISTORY_SIZE;
         currentRootIndex = newRootIndex;
         roots[newRootIndex] = currentLevelHash;
+        isRootKnown[currentLevelHash] = true;
         nextIndex = _nextIndex + 2;
         return _nextIndex;
     }
 
     function isKnownRoot(bytes32 root) public view returns (bool) {
-        if (root == 0) return false;
-        uint32 _current = currentRootIndex;
-        uint32 i = _current;
-        do {
-            if (root == roots[i]) return true;
-            if (i == 0) i = ROOT_HISTORY_SIZE;
-            i--;
-        } while (i != _current);
-        return false;
+        return root != 0 && isRootKnown[root];
+    }
+
+    /// True once all 2^levels leaves are used. New notes can't be added then, but
+    /// withdrawals and exits still work (VesperPool skips inserting their outputs).
+    function isFull() public view returns (bool) {
+        return nextIndex >= uint32(2) ** levels;
     }
 
     function getLastRoot() public view returns (bytes32) {

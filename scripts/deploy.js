@@ -10,7 +10,10 @@ const { MERKLE_TREE_HEIGHT } = require("../src/constants");
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-  if (network.name === "robinhood" && process.env.I_RAN_THE_CEREMONY !== "yes") {
+  // Guard by chain id, not network name, so a renamed network can't skip it.
+  const MAINNET_CHAIN_ID = 4663n; // Robinhood Chain mainnet
+  const onMainnet = (await ethers.provider.getNetwork()).chainId === MAINNET_CHAIN_ID;
+  if (onMainnet && process.env.I_RAN_THE_CEREMONY !== "yes") {
     throw new Error("Refusing mainnet deploy with a dev proving key. Run the ceremony, regenerate Verifier.sol, then set I_RAN_THE_CEREMONY=yes.");
   }
   console.log(`Deploying to ${network.name} from ${deployer.address}`);
@@ -25,7 +28,7 @@ async function main() {
   // mints some to the deployer and enables it in the pool.
   let mockToken;
   if (process.env.MOCK_TOKEN) {
-    if (network.name === "robinhood") throw new Error("MOCK_TOKEN is for testnets only.");
+    if (onMainnet) throw new Error("MOCK_TOKEN is for testnets only.");
     const [symbol, max] = process.env.MOCK_TOKEN.split(":");
     mockToken = await ethers.deployContract("MockStockToken", [`${symbol} Test Stock Token`, symbol]);
     await mockToken.waitForDeployment();

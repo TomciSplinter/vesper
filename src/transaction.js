@@ -47,16 +47,29 @@ async function buildTree(pool, levels = MERKLE_TREE_HEIGHT, fromBlock = 0) {
 }
 
 /** Find this keypair's unspent notes in the pool. Works with a view-only keypair for viewing. */
+/** Every nullifier the pool has seen, from its NewNullifier events. */
+async function fetchSpentNullifiers(pool, fromBlock = 0) {
+  const events = await queryAll(pool, pool.filters.NewNullifier(), fromBlock);
+  return new Set(events.map((e) => BigInt(e.args.nullifier)));
+}
+
+/**
+ * Find this keypair's unspent notes in the pool. Works with a view-only keypair.
+ * Spent status is checked LOCALLY against all NewNullifier events, never by asking
+ * the RPC about specific nullifiers, which would tell the RPC operator which future
+ * spends are yours (self-audit F7).
+ */
 async function scanNotes(pool, keypair, { includeSpent = false, fromBlock = 0 } = {}) {
-  const commitments = await fetchCommitments(pool, fromBlock);
+  const [commitments, spent] = await Promise.all([
+    fetchCommitments(pool, fromBlock),
+    !includeSpent && keypair.nk ? fetchSpentNullifiers(pool, fromBlock) : Promise.resolve(null),
+  ]);
   const notes = [];
   for (const c of commitments) {
     const utxo = Utxo.decrypt(keypair, c.encryptedOutput, c.index, c.commitment);
     if (!utxo || utxo.amount === 0n) continue;
-    // Needs the nullifier key, which spend keys and (new-style) view keys both have.
-    if (!includeSpent && keypair.nk) {
-      if (await pool.isSpent(toBytes32(utxo.getNullifier()))) continue;
-    }
+    // Needs the nullifier key, which spend keys and view keys both have.
+    if (spent && spent.has(utxo.getNullifier())) continue;
     notes.push(utxo);
   }
   return notes;
@@ -134,6 +147,12 @@ async function prepareTransaction({
   for (const u of inputs) if (u.amount === 0n) u.label = inLabel; // dummies hash with inLabel in the circuit
   for (const u of outputs) u.label = label;
 
+  // A full pool still pays out, but stores no new notes: change would be lost.
+  if (typeof pool.isFull === "function" && (await pool.isFull())) {
+    if (extAmount >= 0n) throw new Error("the pool is full: it can only pay out now");
+    if (outputs.some((u) => u.amount > 0n)) throw new Error("the pool is full: withdraw whole notes, with no change");
+  }
+
   // ---- compliance ----
   const paysOut = extAmount < 0n || BigInt(fee) > 0n;
   let aspRoot = 0n;
@@ -146,10 +165,11 @@ async function prepareTransaction({
       if (BigInt(fee) !== 0n) throw new Error("an exit to the depositor can't pay a fee");
       exitLabel = label;
     } else if (asp) {
-      const idx = asp.tree.indexOf(label);
-      if (idx < 0) throw new NotApprovedError(label);
-      const p = asp.tree.path(idx);
-      aspRoot = asp.tree.root();
+      const set = asp.forLabel ? await asp.forLabel(label) : asp.tree.indexOf(label) >= 0 ? { tree: asp.tree } : null;
+      if (!set) throw new NotApprovedError(label);
+      const idx = set.tree.indexOf(label);
+      const p = set.tree.path(idx);
+      aspRoot = set.tree.root();
       aspPathIndices = p.pathIndices;
       aspPathElements = p.pathElements;
     }
@@ -254,23 +274,58 @@ function selectNotes(notes, amount, prefer = () => false) {
   return null;
 }
 
+/** Replays AssociationSetUpdated events into the ordered label list after each update. */
+function replayAssociationSet(events) {
+  const snapshots = [];
+  let list = [];
+  for (const ev of events) {
+    const removed = new Set(ev.args.removed.map(BigInt));
+    const kept = list.filter((l) => !removed.has(l));
+    const keptSet = new Set(kept);
+    list = [...kept, ...ev.args.added.map(BigInt).filter((l) => !keptSet.has(l))];
+    snapshots.push({ root: BigInt(ev.args.root), labels: list });
+  }
+  return snapshots;
+}
+
 /**
- * The pool's current association set (approved deposit labels), rebuilt from the
- * latest AssociationSetUpdated event and CHECKED against the root the pool holds.
- * Returns { root, labels: Set<bigint>, tree, has(label) } or null if none published yet.
+ * The pool's association set (approved deposit labels), rebuilt by replaying every
+ * AssociationSetUpdated event and CHECKED against the root the pool holds.
+ * Returns null if none has been published yet, else
+ *   { root, labels: Set, tree, has(label), forLabel(label) }
+ * forLabel finds the newest still-valid set containing the label: normally the
+ * current one, or, during the pool's grace period after a removal, an older one.
  */
 async function fetchAssociationSet(pool, fromBlock = 0, levels = MERKLE_TREE_HEIGHT) {
   const events = await queryAll(pool, pool.filters.AssociationSetUpdated(), fromBlock);
   if (!events.length) return null;
-  const ev = events[events.length - 1];
-  const labels = ev.args.labels.map(BigInt);
-  const tree = new MerkleTree(levels, labels);
-  const root = BigInt(ev.args.root);
-  if (tree.root() !== root) throw new Error("the published association set doesn't match its root");
+  const snapshots = replayAssociationSet(events);
+  const current = snapshots[snapshots.length - 1];
+  const tree = new MerkleTree(levels, current.labels);
+  if (tree.root() !== current.root) throw new Error("the published association set doesn't match its root");
   const onChain = BigInt(await pool.aspRoot());
-  if (onChain !== root) throw new Error("the association set is out of date; try again in a moment");
-  const set = new Set(labels);
-  return { root, labels: set, tree, has: (l) => set.has(BigInt(l)) };
+  if (onChain !== current.root) throw new Error("the association set is out of date; try again in a moment");
+  const set = new Set(current.labels);
+  return {
+    root: current.root,
+    labels: set,
+    tree,
+    has: (l) => set.has(BigInt(l)),
+    /** { tree, root, current } for the newest valid set holding `label`, or null. */
+    async forLabel(label) {
+      label = BigInt(label);
+      if (set.has(label)) return { tree, root: current.root, current: true };
+      for (let i = snapshots.length - 2; i >= 0 && i >= snapshots.length - 64; i--) {
+        const snap = snapshots[i];
+        if (!snap.labels.includes(label)) continue;
+        if (!(await pool.isKnownAspRoot(snap.root))) return null; // older ones are expired too
+        const t = new MerkleTree(levels, snap.labels);
+        if (t.root() !== snap.root) throw new Error("a published association set doesn't match its root");
+        return { tree: t, root: snap.root, current: false };
+      }
+      return null;
+    },
+  };
 }
 
 /** Raw stock-token units -> underlying shares, per ERC-8056. */
@@ -278,4 +333,4 @@ function toShares(rawAmount, uiMultiplier) {
   return (BigInt(rawAmount) * BigInt(uiMultiplier)) / 10n ** 18n;
 }
 
-module.exports = { prepareTransaction, NotApprovedError, fetchAssociationSet, hashExtData, publicAmountField, buildTree, scanNotes, fetchCommitments, selectNotes, toShares, toBytes32 };
+module.exports = { prepareTransaction, NotApprovedError, fetchAssociationSet, replayAssociationSet, fetchSpentNullifiers, hashExtData, publicAmountField, buildTree, scanNotes, fetchCommitments, selectNotes, toShares, toBytes32 };

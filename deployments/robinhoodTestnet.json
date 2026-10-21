@@ -14,5 +14,6 @@
   "relayerFees": {
     "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E": "0.01",
     "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112": "0.1"
-  }
+  },
+  "sponsorExits": true
 }

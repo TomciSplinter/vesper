@@ -198,13 +198,18 @@ function Balances({ vesper, data, onRefresh, refreshing, wide }) {
       )}
       {!data && <p className="muted">Scanning the pool for your notes…</p>}
       {data &&
-        data.byAsset.map(({ asset, total, pending, notes, uiMultiplier, walletBalance }) => (
+        data.byAsset.map(({ asset, total, pending, expiring, expiringBy, notes, uiMultiplier, walletBalance }) => (
           <div className="asset" key={asset.address} data-testid={`balance-${asset.symbol}`}>
             <div>
               <div className="sym">{asset.symbol}</div>
               {pending > 0n && (
                 <div className="pending small" data-testid={`pending-${asset.symbol}`}>
                   {fmt(pending)} waiting for approval
+                </div>
+              )}
+              {expiring > 0n && (
+                <div className="pending small" data-testid={`expiring-${asset.symbol}`}>
+                  {fmt(expiring)} was removed from the approved list: withdraw it privately by {new Date(expiringBy).toLocaleDateString()}
                 </div>
               )}
               <div className="muted small">
@@ -271,6 +276,7 @@ function ActionForm({ vesper, kind, data, run }) {
         <label className="field">
           <span>Their Vesper address</span>
           <textarea rows={3} value={to} onChange={(e) => setTo(e.target.value)} placeholder="0x… (long address from their Receive tab)" data-testid="to" />
+          <small className="muted">The person you pay can see which public wallet first deposited this money, and how much it deposited. Nobody else can.</small>
         </label>
       )}
       {kind === "withdraw" && (
@@ -291,7 +297,7 @@ function ActionForm({ vesper, kind, data, run }) {
         <div className="exit-box">
           <p className="small">
             {fmt(row.pending)} {symbol} is waiting for approval, so it can't be withdrawn privately yet. You can wait, or return it to the wallet
-            that deposited it. Returning is public: anyone can see it came back from that deposit.
+            that made the original deposit. If this money was sent to you, that is the sender's wallet, not yours. Returning is public.
           </p>
           <button className="btn wide" onClick={() => run((s) => vesper.returnToDepositor(asset, s))} data-testid="return-to-depositor">
             Return to depositing wallet
@@ -467,7 +473,12 @@ function App() {
         </div>
       </header>
 
-      {vesper.config.testnet && <div className="banner">Testnet. Unaudited software. Don't use real funds.</div>}
+      {vesper.config.notice ? (
+        <div className="banner">{vesper.config.notice}</div>
+      ) : (
+        vesper.config.testnet && <div className="banner">Testnet. Unaudited software. Don't use real funds.</div>
+      )}
+      {unlocked && vesper.accountWarning && <div className="banner warn-banner" data-testid="account-warning">{vesper.accountWarning}</div>}
 
       {!unlocked ? (
         <Welcome vesper={vesper} onUnlocked={() => setUnlocked(true)} onError={(e) => setProgress({ status: "error", error: friendly(e) })} />

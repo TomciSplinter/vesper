@@ -128,3 +128,4 @@ footer { text-align: center; margin-top: 28px; }
   .action-side .card { padding: 24px; }
   footer { margin-top: 48px; }
 }
+.warn-banner { color: var(--danger); border-color: rgba(255, 138, 138, 0.4); background: rgba(255, 138, 138, 0.08); }
