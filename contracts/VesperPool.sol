@@ -80,10 +80,13 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     event NewNullifier(bytes32 indexed nullifier);
     event AssetConfigured(address indexed asset, bool depositsEnabled, uint256 maxDepositAmount);
     event DepositsPaused(bool paused);
-    event GuardianSet(address guardian);
+    event GuardianSet(address indexed guardian);
     event NewDeposit(uint256 indexed label, address indexed depositor, address indexed asset, uint256 amount);
     event AssociationSetUpdated(uint256 root, uint256[] labels, string uri);
-    event AspPostmanSet(address postman);
+    event AspPostmanSet(address indexed postman);
+    event ChangeScheduled(bytes32 indexed id, bytes data, uint256 executableAt);
+    event ChangeCancelled(bytes32 indexed id);
+    event ChangeExecuted(bytes32 indexed id);
     event ComplianceRequired(bool required);
 
     error AssetNotEnabled();
@@ -101,14 +104,36 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     error NotApproved();
     error BadExit();
     error NotPostman();
+    error NotScheduled();
+    error AlreadyScheduled();
+    error TooEarly();
+    error NotAllowed();
+    error OnlySelf();
+    error ZeroAddress();
+    error LengthMismatch();
 
-    constructor(IVerifier _verifier, IHasher _hasher, uint32 _levels, address _owner)
-        MerkleTreeWithHistory(_levels, _hasher)
-        Ownable(_owner)
-    {
+    /// Initial settings are set here, at deploy time, so launch doesn't wait for the
+    /// admin delay. Every later change that loosens a rule waits ADMIN_DELAY.
+    constructor(
+        IVerifier _verifier,
+        IHasher _hasher,
+        uint32 _levels,
+        address _owner,
+        address _aspPostman,
+        address[] memory _assets,
+        uint256[] memory _maxDeposits
+    ) MerkleTreeWithHistory(_levels, _hasher) Ownable(_owner) {
+        if (_aspPostman == address(0)) revert ZeroAddress();
+        if (_assets.length != _maxDeposits.length) revert LengthMismatch();
         verifier = _verifier;
         guardian = _owner;
-        aspPostman = _owner;
+        aspPostman = _aspPostman;
+        emit GuardianSet(_owner);
+        emit AspPostmanSet(_aspPostman);
+        for (uint256 i = 0; i < _assets.length; i++) {
+            assetConfig[_assets[i]] = AssetConfig(true, _maxDeposits[i]);
+            emit AssetConfigured(_assets[i], true, _maxDeposits[i]);
+        }
     }
 
     // ------------------------------------------------------------------ user
@@ -159,26 +184,95 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
     }
 
     // ----------------------------------------------------------------- admin
+    //
+    // Changes that loosen a rule or hand over a role are SCHEDULED: announced on-chain
+    // (ChangeScheduled), and possible only after ADMIN_DELAY, so anyone who disagrees
+    // can see it coming and withdraw first. Changes that only restrict NEW deposits
+    // are instant, as emergency brakes. No admin power touches user funds.
 
-    function configureAsset(address asset, bool depositsEnabled, uint256 maxDepositAmount) external onlyOwner {
+    uint256 public constant ADMIN_DELAY = 3 days;
+    /// change id (keccak256 of the encoded call) => earliest execution time
+    mapping(bytes32 => uint256) public scheduledAt;
+
+    modifier onlySelf() {
+        if (msg.sender != address(this)) revert OnlySelf();
+        _;
+    }
+
+    /// `data` = abi-encoded call to one of the apply* functions below.
+    function scheduleChange(bytes calldata data) external onlyOwner returns (bytes32 id) {
+        _checkDelayedCall(data);
+        id = keccak256(data);
+        if (scheduledAt[id] != 0) revert AlreadyScheduled();
+        uint256 eta = block.timestamp + ADMIN_DELAY;
+        scheduledAt[id] = eta;
+        emit ChangeScheduled(id, data, eta);
+    }
+
+    function cancelChange(bytes32 id) external onlyOwner {
+        if (scheduledAt[id] == 0) revert NotScheduled();
+        delete scheduledAt[id];
+        emit ChangeCancelled(id);
+    }
+
+    function executeChange(bytes calldata data) external onlyOwner {
+        bytes32 id = keccak256(data);
+        uint256 eta = scheduledAt[id];
+        if (eta == 0) revert NotScheduled();
+        if (block.timestamp < eta) revert TooEarly();
+        delete scheduledAt[id];
+        (bool ok, bytes memory ret) = address(this).call(data);
+        if (!ok) {
+            assembly {
+                revert(add(ret, 32), mload(ret))
+            }
+        }
+        emit ChangeExecuted(id);
+    }
+
+    function _checkDelayedCall(bytes calldata data) internal pure {
+        if (data.length < 4) revert NotAllowed();
+        bytes4 sel = bytes4(data[:4]);
+        if (
+            sel != VesperPool.applyAssetConfig.selector && sel != VesperPool.applyGuardian.selector
+                && sel != VesperPool.applyAspPostman.selector && sel != VesperPool.applyComplianceRequired.selector
+        ) revert NotAllowed();
+    }
+
+    // Delayed (only reachable through executeChange):
+
+    function applyAssetConfig(address asset, bool depositsEnabled, uint256 maxDepositAmount) external onlySelf {
         assetConfig[asset] = AssetConfig(depositsEnabled, maxDepositAmount);
         emit AssetConfigured(asset, depositsEnabled, maxDepositAmount);
     }
 
-    function setGuardian(address _guardian) external onlyOwner {
-        guardian = _guardian;
-        emit GuardianSet(_guardian);
+    function applyGuardian(address newGuardian) external onlySelf {
+        if (newGuardian == address(0)) revert ZeroAddress();
+        guardian = newGuardian;
+        emit GuardianSet(newGuardian);
     }
 
-    function setAspPostman(address postman) external onlyOwner {
-        aspPostman = postman;
-        emit AspPostmanSet(postman);
+    function applyAspPostman(address newPostman) external onlySelf {
+        if (newPostman == address(0)) revert ZeroAddress();
+        aspPostman = newPostman;
+        emit AspPostmanSet(newPostman);
     }
 
     /// Exits to the original depositor always work, whatever this is set to.
-    function setComplianceRequired(bool required) external onlyOwner {
+    function applyComplianceRequired(bool required) external onlySelf {
         complianceRequired = required;
         emit ComplianceRequired(required);
+    }
+
+    // Instant (only restrict new deposits):
+
+    /// Lowers an asset's per-deposit cap; 0 also disables its deposits.
+    function restrictAsset(address asset, uint256 newMaxDeposit) external {
+        if (msg.sender != guardian && msg.sender != owner()) revert NotGuardian();
+        AssetConfig storage cfg = assetConfig[asset];
+        if (newMaxDeposit < cfg.maxDepositAmount) cfg.maxDepositAmount = newMaxDeposit;
+        if (newMaxDeposit == 0) cfg.depositsEnabled = false;
+        emit AssetConfigured(asset, cfg.depositsEnabled, cfg.maxDepositAmount);
     }
 
     /// Publishes a new association set: the Poseidon Merkle root of the approved
@@ -192,7 +286,8 @@ contract VesperPool is MerkleTreeWithHistory, ReentrancyGuard, Ownable2Step {
         emit AssociationSetUpdated(root, labels, uri);
     }
 
-    /// Emergency brake on NEW deposits only. Withdrawals always stay open.
+    /// Emergency brake on NEW deposits only (instant both ways: it only returns to
+    /// already-announced settings). Withdrawals always stay open.
     function setDepositsPaused(bool paused) external {
         if (msg.sender != guardian && msg.sender != owner()) revert NotGuardian();
         depositsPaused = paused;

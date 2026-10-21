@@ -1,0 +1,16 @@
+template instances: 292
+warning[CA02]: In template "Transaction(20,20,2,2)": Array of subcomponent input/output signals outAmountCheck[0].out contains a total of 248 signals that do not appear in any constraint of the father component
+ = For example: outAmountCheck[0].out[0], outAmountCheck[0].out[100].
+
+warning[CA02]: In template "Transaction(20,20,2,2)": Array of subcomponent input/output signals outAmountCheck[1].out contains a total of 248 signals that do not appear in any constraint of the father component
+ = For example: outAmountCheck[1].out[0], outAmountCheck[1].out[100].
+
+non-linear constraints: 17740
+linear constraints: 0
+public inputs: 11
+private inputs: 76 (75 belong to witness)
+public outputs: 0
+wires: 17813
+labels: 57112
+Written successfully: /tmp/claude-0/-home-claude/c953398b-7a09-5546-920d-5b08ccd85dfb/scratchpad/inspect/transaction2.r1cs
+Everything went okay

@@ -1,0 +1,31 @@
+INFO:Detectors:
+Detector: missing-zero-check
+VesperPool.constructor(IVerifier,IHasher,uint32,address)._owner (contracts/VesperPool.sol#105) lacks a zero-check on :
+		- guardian = _owner (contracts/VesperPool.sol#110)
+		- aspPostman = _owner (contracts/VesperPool.sol#111)
+VesperPool.setGuardian(address)._guardian (contracts/VesperPool.sol#168) lacks a zero-check on :
+		- guardian = _guardian (contracts/VesperPool.sol#169)
+VesperPool.setAspPostman(address).postman (contracts/VesperPool.sol#173) lacks a zero-check on :
+		- aspPostman = postman (contracts/VesperPool.sol#174)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+INFO:Detectors:
+Detector: calls-loop
+MerkleTreeWithHistory._hashLeftRight(IHasher,bytes32,bytes32) (contracts/MerkleTreeWithHistory.sol#47-51) has external calls inside a loop: bytes32(_hasher.poseidon((uint256(left),uint256(right)))) (contracts/MerkleTreeWithHistory.sol#50)
+	Calls stack containing the loop:
+		VesperPool.constructor(IVerifier,IHasher,uint32,address)
+		MerkleTreeWithHistory.constructor(uint32,IHasher)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
+INFO:Detectors:
+Detector: cyclomatic-complexity
+VesperPool._transact(VesperPool.Proof,VesperPool.ExtData,address) (contracts/VesperPool.sol#204-233) has a high cyclomatic complexity (13).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+INFO:Detectors:
+Detector: naming-convention
+Parameter VesperPool.setGuardian(address)._guardian (contracts/VesperPool.sol#168) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+INFO:Detectors:
+Detector: unindexed-event-address
+Event VesperPool.GuardianSet(address) (contracts/VesperPool.sol#83) has address parameters but no indexed parameters
+Event VesperPool.AspPostmanSet(address) (contracts/VesperPool.sol#86) has address parameters but no indexed parameters
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unindexed-event-address-parameters
+INFO:Slither:. analyzed (20 contracts with 102 detectors), 8 result(s) found

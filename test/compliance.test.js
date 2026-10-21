@@ -5,7 +5,7 @@ const path = require("path");
 const { loadFixture } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const src = require("../src");
 const { Keypair, Utxo, buildTree, scanNotes, fetchAssociationSet, associationTree, NotApprovedError } = src;
-const { deployVesper, approveAll } = require("./helpers");
+const { deployVesper, approveAll, adminChange } = require("./helpers");
 
 const e = (n) => ethers.parseEther(String(n));
 const WASM = path.join(__dirname, "..", "build", "transaction2_js", "transaction2.wasm");
@@ -156,9 +156,10 @@ describe("Compliance (association sets)", function () {
   it("only the postman publishes the list; only the owner changes the rules", async function () {
     const ctx = await loadFixture(setup);
     await expect(ctx.pool.connect(ctx.bob).updateAssociationSet(1, [], "")).to.be.revertedWithCustomError(ctx.pool, "NotPostman");
-    await expect(ctx.pool.connect(ctx.bob).setComplianceRequired(false)).to.be.revertedWithCustomError(ctx.pool, "OwnableUnauthorizedAccount");
+    const off = ctx.pool.interface.encodeFunctionData("applyComplianceRequired", [false]);
+    await expect(ctx.pool.connect(ctx.bob).scheduleChange(off)).to.be.revertedWithCustomError(ctx.pool, "OwnableUnauthorizedAccount");
     // With compliance switched off, a withdrawal without a proof of approval is allowed.
-    await ctx.pool.setComplianceRequired(false);
+    await adminChange(ctx.pool, ctx.owner, "applyComplianceRequired", [false]);
     const [note] = await scanNotes(ctx.pool, ctx.carolKp);
     const p = await ctx.prep({ inputs: [note], recipient: ctx.bob.address, asp: null });
     await ctx.pool.transact(p.args, p.extData, ctx.tslaAddr);

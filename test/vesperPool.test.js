@@ -209,7 +209,7 @@ describe("VesperPool", function () {
 
     it("admin can stop new deposits but never block withdrawals", async function () {
       const ctx = await loadFixture(withAliceDeposit);
-      await ctx.pool.configureAsset(ctx.tslaAddr, false, 0);
+      await ctx.pool.restrictAsset(ctx.tslaAddr, 0);
       await ctx.pool.setDepositsPaused(true);
 
       await expect(transact(ctx, ctx.alice, { asset: ctx.tslaAddr, outputs: [new Utxo({ amount: 1n, keypair: ctx.aliceKp, asset: ctx.tslaAddr })] }))
@@ -242,8 +242,11 @@ describe("VesperPool", function () {
 
     it("only the owner configures assets; only guardian/owner pause", async function () {
       const ctx = await deployVesper();
-      await expect(ctx.pool.connect(ctx.alice).configureAsset(ctx.alice.address, true, 1))
+      const data = ctx.pool.interface.encodeFunctionData("applyAssetConfig", [ctx.alice.address, true, 1]);
+      await expect(ctx.pool.connect(ctx.alice).scheduleChange(data))
         .to.be.revertedWithCustomError(ctx.pool, "OwnableUnauthorizedAccount");
+      await expect(ctx.pool.connect(ctx.alice).restrictAsset(await ctx.tsla.getAddress(), 0))
+        .to.be.revertedWithCustomError(ctx.pool, "NotGuardian");
       await expect(ctx.pool.connect(ctx.alice).setDepositsPaused(true))
         .to.be.revertedWithCustomError(ctx.pool, "NotGuardian");
     });

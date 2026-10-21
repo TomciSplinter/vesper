@@ -19,14 +19,6 @@ async function main() {
   await hasher.waitForDeployment();
   const verifier = await ethers.deployContract("Groth16Verifier");
   await verifier.waitForDeployment();
-  const pool = await ethers.deployContract("VesperPool", [
-    await verifier.getAddress(),
-    await hasher.getAddress(),
-    MERKLE_TREE_HEIGHT,
-    deployer.address,
-  ]);
-  await pool.waitForDeployment();
-
   const assets = (process.env.ASSETS || "").split(",").filter(Boolean);
 
   // Testnet only: MOCK_TOKEN="SYMBOL:maxDeposit" deploys a stand-in stock token,
@@ -42,11 +34,23 @@ async function main() {
     assets.push(`${await mockToken.getAddress()}:${max || "1000"}`);
   }
 
-  for (const entry of assets) {
-    const [asset, max] = entry.split(":");
-    await (await pool.configureAsset(asset, true, ethers.parseEther(max))).wait();
-    console.log(`  enabled ${asset} (max ${max} per deposit)`);
-  }
+  // Initial assets and the approval publisher go in the constructor: later changes
+  // that loosen rules have to wait the pool's 3-day ADMIN_DELAY.
+  const postman = process.env.ASP_POSTMAN || deployer.address;
+  const assetAddrs = assets.map((a) => a.split(":")[0]);
+  const caps = assets.map((a) => ethers.parseEther(a.split(":")[1]));
+  const pool = await ethers.deployContract("VesperPool", [
+    await verifier.getAddress(),
+    await hasher.getAddress(),
+    MERKLE_TREE_HEIGHT,
+    deployer.address,
+    postman,
+    assetAddrs,
+    caps,
+  ]);
+  await pool.waitForDeployment();
+  for (const entry of assets) console.log(`  enabled ${entry.split(":")[0]} (max ${entry.split(":")[1]} per deposit)`);
+  console.log(`  aspPostman ${postman}`);
 
   const deployment = {
     network: network.name,

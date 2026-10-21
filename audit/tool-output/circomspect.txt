@@ -1,0 +1,277 @@
+circomspect: analyzing template 'Transaction'
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+   ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:69:26
+   │
+69 │     signal isDeposit <== 1 - newLabelZero.out;
+   │                          ^^^^^^^^^^^^^^^^^^^^ Field element arithmetic here.
+   │
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+   = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+   ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:70:22
+   │
+70 │     signal label <== inLabel + isDeposit * (newLabel - inLabel);
+   │                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Field element arithmetic here.
+   │
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+   = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:104:37
+    │
+104 │         for (var i = 0; i < levels; i++) {
+    │                                     ^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:115:9
+    │
+115 │         sumIns += inAmount[tx];
+    │         ^^^^^^^^^^^^^^^^^^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+   ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:81:33
+   │
+81 │     for (var tx = 0; tx < nIns; tx++) {
+   │                                 ^^^^ Field element arithmetic here.
+   │
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+   = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:119:5
+    │
+119 │     newLabel * sumIns === 0;
+    │     ^^^^^^^^^^^^^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:139:9
+    │
+139 │         sumOuts += outAmount[tx];
+    │         ^^^^^^^^^^^^^^^^^^^^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:126:34
+    │
+126 │     for (var tx = 0; tx < nOuts; tx++) {
+    │                                  ^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:143:30
+    │
+143 │     component sameNullifiers[nIns * (nIns - 1) / 2];
+    │                              ^^^^^^^^^^^^^^^^^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:145:25
+    │
+145 │     for (var i = 0; i < nIns - 1; i++) {
+    │                         ^^^^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:146:22
+    │
+146 │         for (var j = i + 1; j < nIns; j++) {
+    │                      ^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:151:13
+    │
+151 │             index++;
+    │             ^^^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:146:39
+    │
+146 │         for (var j = i + 1; j < nIns; j++) {
+    │                                       ^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:145:35
+    │
+145 │     for (var i = 0; i < nIns - 1; i++) {
+    │                                   ^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:156:5
+    │
+156 │     sumIns + publicAmount === sumOuts;
+    │     ^^^^^^^^^^^^^^^^^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:163:36
+    │
+163 │     for (var i = 0; i < aspLevels; i++) {
+    │                                    ^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:179:30
+    │
+179 │     signal extDataSquare <== extDataHash * extDataHash;
+    │                              ^^^^^^^^^^^^^^^^^^^^^^^^^ Field element arithmetic here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+    = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0003]: Comparisons with field elements greater than `p/2` may produce unexpected results.
+   ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:81:22
+   │
+81 │     for (var tx = 0; tx < nIns; tx++) {
+   │                      ^^^^^^^^^ Field element comparison here.
+   │
+   = Field elements are always normalized to the interval `(-p/2, p/2]` before they are compared.
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-comparison.
+   = To ignore this type of result, use `--allow CS0003`.
+
+note[CS0003]: Comparisons with field elements greater than `p/2` may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:104:25
+    │
+104 │         for (var i = 0; i < levels; i++) {
+    │                         ^^^^^^^^^^ Field element comparison here.
+    │
+    = Field elements are always normalized to the interval `(-p/2, p/2]` before they are compared.
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-comparison.
+    = To ignore this type of result, use `--allow CS0003`.
+
+note[CS0003]: Comparisons with field elements greater than `p/2` may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:126:22
+    │
+126 │     for (var tx = 0; tx < nOuts; tx++) {
+    │                      ^^^^^^^^^^ Field element comparison here.
+    │
+    = Field elements are always normalized to the interval `(-p/2, p/2]` before they are compared.
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-comparison.
+    = To ignore this type of result, use `--allow CS0003`.
+
+note[CS0003]: Comparisons with field elements greater than `p/2` may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:145:21
+    │
+145 │     for (var i = 0; i < nIns - 1; i++) {
+    │                     ^^^^^^^^^^^^ Field element comparison here.
+    │
+    = Field elements are always normalized to the interval `(-p/2, p/2]` before they are compared.
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-comparison.
+    = To ignore this type of result, use `--allow CS0003`.
+
+note[CS0003]: Comparisons with field elements greater than `p/2` may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:146:29
+    │
+146 │         for (var j = i + 1; j < nIns; j++) {
+    │                             ^^^^^^^^ Field element comparison here.
+    │
+    = Field elements are always normalized to the interval `(-p/2, p/2]` before they are compared.
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-comparison.
+    = To ignore this type of result, use `--allow CS0003`.
+
+note[CS0003]: Comparisons with field elements greater than `p/2` may produce unexpected results.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:163:21
+    │
+163 │     for (var i = 0; i < aspLevels; i++) {
+    │                     ^^^^^^^^^^^^^ Field element comparison here.
+    │
+    = Field elements are always normalized to the interval `(-p/2, p/2]` before they are compared.
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-comparison.
+    = To ignore this type of result, use `--allow CS0003`.
+
+warning[CS0017]: Intermediate signals should typically occur in at least two separate constraints.
+    ┌─ /home/claude/vesper/vesper/circuits/transaction.circom:179:5
+    │
+179 │     signal extDataSquare <== extDataHash * extDataHash;
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    │     │
+    │     The intermediate signal `extDataSquare` is declared here.
+    │     The intermediate signal `extDataSquare` is constrained here.
+    │
+    = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#under-constrained-signal.
+    = To ignore this type of result, use `--allow CS0017`.
+
+circomspect: analyzing template 'NullifierKey'
+circomspect: analyzing template 'MerkleProof'
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+   ┌─ /home/claude/vesper/vesper/circuits/merkleproof.circom:24:50
+   │
+24 │         switcher[i].L <== i == 0 ? leaf : hasher[i - 1].out;
+   │                                                  ^^^^^ Field element arithmetic here.
+   │
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+   = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+   ┌─ /home/claude/vesper/vesper/circuits/merkleproof.circom:22:33
+   │
+22 │     for (var i = 0; i < levels; i++) {
+   │                                 ^^^ Field element arithmetic here.
+   │
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+   = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0004]: Field element arithmetic could overflow, which may produce unexpected results.
+   ┌─ /home/claude/vesper/vesper/circuits/merkleproof.circom:33:21
+   │
+33 │     root <== hasher[levels - 1].out;
+   │                     ^^^^^^^^^^ Field element arithmetic here.
+   │
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-arithmetic.
+   = To ignore this type of result, use `--allow CS0004`.
+
+note[CS0003]: Comparisons with field elements greater than `p/2` may produce unexpected results.
+   ┌─ /home/claude/vesper/vesper/circuits/merkleproof.circom:22:21
+   │
+22 │     for (var i = 0; i < levels; i++) {
+   │                     ^^^^^^^^^^ Field element comparison here.
+   │
+   = Field elements are always normalized to the interval `(-p/2, p/2]` before they are compared.
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#field-element-comparison.
+   = To ignore this type of result, use `--allow CS0003`.
+
+warning[CS0010]: Using `Num2Bits` to convert field elements to bits may lead to aliasing issues.
+   ┌─ /home/claude/vesper/vesper/circuits/merkleproof.circom:19:27
+   │
+19 │     component indexBits = Num2Bits(levels);
+   │                           ^^^^^^^^^^^^^^^^ Circomlib template `Num2Bits` instantiated here.
+   │
+   = Consider using `Num2Bits_strict` if the input size may be >= than the prime size.
+   = For more details, see https://github.com/trailofbits/circomspect/blob/main/doc/analysis_passes.md#non-strict-binary-conversion.
+   = To ignore this type of result, use `--allow CS0010`.
+
+circomspect: analyzing template 'Keypair'
+circomspect: 29 issues found.
