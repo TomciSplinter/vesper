@@ -86,9 +86,11 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 - Enabled in the compliance pool (cap 1000 per deposit). Added to the app as "TSLA" (vTSLA kept).
 - Relayer fees now default from `deployments/robinhoodTestnet.json` → `relayerFees` (TSLA 0.01, vTSLA 0.1); the `RELAYER_FEES` env var is optional and overrides per asset.
 
+- **Live with real Robinhood test stock (21 Oct 2026):** the founder claimed TSLA from the official faucet, deposited 3 TSLA from a phone (tx `0x814e80…a3d`), then withdrew 1 TSLA through the Vercel relayer to `0xE345…aa03` (tx `0xccfa5e…5446`, sent by the relayer, with proof of approval, 0.01 TSLA fee). Pool holds 1.99 TSLA.
+
 ## Next steps
 1. ~~`npm install`, install circom, `npm run build`, `npm test`; fix whatever fails.~~ Done.
-2. Deploy to Robinhood Chain testnet with a real stock token address.
+2. ~~Deploy to Robinhood Chain testnet with a real stock token address.~~ Done: real testnet TSLA works end to end.
 3. ~~Relayer service~~ and ~~web app~~ v0.1 done (see above). Web app hosted on Vercel at vesper.markets. ~~View-key spent-status gap~~ fixed. Relayer runs as Vercel functions at vesper.markets/api (see below). Relayer hardening before mainnet: price-feed fees, persistent jobs, run it on a real server, several operators.
 4. ~~Compliance: association-set proofs (Privacy Pools style).~~ Mechanism done (see above); the screening policy and provider are still open.
 5. Trusted-setup ceremony with outside contributors, ZK audit, legal review (private holdings of tokenized securities), then mainnet with small deposit caps. Token launch last.
