@@ -87,7 +87,20 @@ describe("Serverless relayer (Vercel functions)", function () {
     expect((await call(ctx.h.job, { query: { id: "0x" + "ab".repeat(32) } })).status).to.equal(404);
   });
 
-  it("says clearly when the relayer isn't configured", function () {
+  it("says clearly when the relayer isn't configured, naming the bad setting", function () {
     expect(() => relayerFromEnv({})).to.throw("relayer not configured");
+    const ok = {
+      RELAYER_KEY: "0x" + "11".repeat(32),
+      RPC_URL: "https://rpc.example",
+      CHAIN_ID: "46630",
+      POOL: "0x163BDa760077E965beB13570222C2267aD2A3957",
+      RELAYER_FEES: "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112:0.1",
+    };
+    expect(() => relayerFromEnv({ ...ok, RELAYER_KEY: "0x1234" })).to.throw("RELAYER_KEY must be");
+    expect(() => relayerFromEnv({ ...ok, CHAIN_ID: "abc" })).to.throw("CHAIN_ID must be");
+    expect(() => relayerFromEnv({ ...ok, RELAYER_FEES: "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112" })).to.throw("RELAYER_FEES");
+    // Stray quotes and spaces around a pasted value are fine.
+    const r = relayerFromEnv({ ...ok, RELAYER_KEY: ` "${ok.RELAYER_KEY}" `, POOL: `'${ok.POOL}'` });
+    expect(r).to.be.ok;
   });
 });
