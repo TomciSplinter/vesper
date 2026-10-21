@@ -13,6 +13,8 @@ import { chromium } from "playwright";
 
 const require = createRequire(import.meta.url);
 const { ethers } = require("ethers");
+const { initPoseidon } = require("../../src");
+const { publishAssociationSet } = require("../../relayer/aspUpdate");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..", "..");
@@ -21,6 +23,7 @@ const base = JSON.parse(fs.readFileSync(path.join(here, "..", "config", "robinho
 const RPC = process.env.RPC_URL || base.rpcUrl;
 const PASS_PORT = 8546;
 const APP_PORT = 5174;
+const ASP_PORT = 8790;
 
 function check(cond, msg) {
   if (!cond) throw new Error(`CHECK FAILED: ${msg}`);
@@ -66,8 +69,34 @@ async function main() {
   const token = new ethers.Contract(base.assets[0].address, ["function balanceOf(address) view returns (uint256)"], provider);
   await new Promise((r) => pass.listen(PASS_PORT, "127.0.0.1", r));
 
+  // Local copy of /api/asp-update, signing as the pool's postman (RELAYER_KEY wallet).
+  await initPoseidon();
+  const postman = new ethers.Wallet(process.env.RELAYER_KEY, provider);
+  const poolAsPostman = new ethers.Contract(
+    base.pool,
+    [
+      "event NewDeposit(uint256 indexed label, address indexed depositor, address indexed asset, uint256 amount)",
+      "function aspRoot() view returns (uint256)",
+      "function updateAssociationSet(uint256 root, uint256[] labels, string uri)",
+    ],
+    postman
+  );
+  const asp = http.createServer(async (req, res) => {
+    const cors = { "access-control-allow-origin": "*", "content-type": "application/json" };
+    if (req.method === "OPTIONS") return res.writeHead(204, cors).end();
+    try {
+      const r = await publishAssociationSet(poolAsPostman, { fromBlock: base.deployBlock, blocklist: [] });
+      console.log(`    screener: ${r.approved}/${r.total} approved${r.changed ? ", published" : ""}`);
+      res.writeHead(200, cors).end(JSON.stringify(r));
+    } catch (err) {
+      console.log("    screener error:", err.shortMessage || err.message);
+      res.writeHead(500, cors).end(JSON.stringify({ error: err.message }));
+    }
+  });
+  await new Promise((r) => asp.listen(ASP_PORT, "127.0.0.1", r));
+
   const cfgPath = path.join(here, "testnet-check.config.json");
-  fs.writeFileSync(cfgPath, JSON.stringify({ ...base, rpcUrl: `http://127.0.0.1:${PASS_PORT}`, relayers: [process.env.RELAYER_URL || "http://127.0.0.1:8787"] }, null, 2));
+  fs.writeFileSync(cfgPath, JSON.stringify({ ...base, rpcUrl: `http://127.0.0.1:${PASS_PORT}`, relayers: [process.env.RELAYER_URL || "http://127.0.0.1:8787"], aspUpdateUrl: `http://127.0.0.1:${ASP_PORT}/asp-update` }, null, 2));
   execFileSync("node", [path.join(root, "webapp", "build.mjs"), cfgPath], { cwd: root, stdio: "inherit" });
   const app = await serveStatic(path.join(root, "webapp", "dist"), APP_PORT);
 
@@ -120,6 +149,7 @@ async function main() {
   await page.click('[data-testid="submit-deposit"]');
   await done("deposit");
   check((await priv()) === start + ethers.parseEther("2"), "deposit of 2 vTSLA shows in the private balance");
+  check(!(await page.$('[data-testid="pending-vTSLA"]')), "the deposit was approved by the screener (nothing waiting)");
 
   const fresh = ethers.Wallet.createRandom().address;
   await page.click('[data-testid="tab-withdraw"]');
@@ -150,6 +180,7 @@ async function main() {
   await browser.close();
   app.close();
   pass.close();
+  asp.close();
   console.log("\nTestnet web app check PASSED");
 }
 

@@ -4,7 +4,8 @@
 const fs = require("fs");
 const path = require("path");
 const { ethers, network } = require("hardhat");
-const { initPoseidon, Keypair, Utxo, prepareTransaction, buildTree, scanNotes } = require("../src");
+const { initPoseidon, Keypair, Utxo, prepareTransaction, buildTree, scanNotes, fetchAssociationSet } = require("../src");
+const { publishAssociationSet } = require("../relayer/aspUpdate");
 
 const e = (n) => ethers.parseEther(String(n));
 const fmt = (n) => ethers.formatEther(n);
@@ -40,8 +41,16 @@ async function main() {
   }
 
   await send("1. deposit 10 into Alice's note", {
+    depositor: signer.address,
     outputs: [new Utxo({ amount: e(10), keypair: alice, asset })],
   });
+
+  // The screener approves the deposit (postman = RELAYER_KEY wallet, or the signer).
+  const postmanKey = process.env.ASP_KEY || process.env.RELAYER_KEY;
+  const postman = postmanKey ? new ethers.Wallet(postmanKey, ethers.provider) : signer;
+  const published = await publishAssociationSet(pool.connect(postman), { fromBlock, blocklist: require("../asp/blocklist.json") });
+  console.log(`   screener: ${published.approved}/${published.total} deposits approved${published.txHash ? " " + explorer(published.txHash) : ""}`);
+  const asp = await fetchAssociationSet(pool, fromBlock);
 
   const [aliceNote] = await scanNotes(pool, alice, { fromBlock });
   await send("2. private transfer 4 to Bob, 6 change to Alice", {
@@ -53,7 +62,7 @@ async function main() {
   });
 
   const [bobNote] = await scanNotes(pool, bob, { fromBlock });
-  await send("3. Bob withdraws 4 to a fresh address", { inputs: [bobNote], recipient: fresh });
+  await send("3. Bob withdraws 4 to a fresh address (proving the money is approved)", { inputs: [bobNote], recipient: fresh, asp });
 
   const aliceLeft = (await scanNotes(pool, alice, { fromBlock })).map((n) => fmt(n.amount));
   const bobLeft = (await scanNotes(pool, bob, { fromBlock })).map((n) => fmt(n.amount));

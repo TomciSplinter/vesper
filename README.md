@@ -35,6 +35,20 @@ New notes are encrypted to their owner (X25519 + XSalsa20-Poly1305) and emitted 
 - Robinhood can **pause** a token. While paused, withdrawals of that asset revert; the notes stay valid and work again after unpause.
 - The Robinhood Chain sequencer screens addresses against a restricted list. Expect that to apply to deposits and withdrawals.
 
+## Compliance (association sets)
+
+Vesper follows the Privacy Pools approach, adapted to private transfers:
+
+- **Every deposit gets a label** chosen by the pool, recorded with the depositing wallet. The label is part of every note and **follows the money**: notes created from it, including ones you send to someone else, carry the same label. A deposit can't also spend notes, so new money can't borrow an old label.
+- **A screener (the "ASP") publishes the association set**: the Merkle root of approved labels, plus the list itself so wallets can rebuild and check it. v0.1 policy: approve every deposit except from addresses in `asp/blocklist.json` (`MIN_AGE_SECONDS` can add a waiting period). On testnet the web app asks `/api/asp-update` to run right after a deposit.
+- **Anything that pays out of the pool** (a withdrawal, or any relayer fee) must prove, in zero knowledge, that its label is in the current or previous association set, without revealing which label.
+- **Unapproved money is never stuck**: it can always be **returned to the wallet that deposited it** ("exit"). That's public, has no fee, and can't go anywhere else. Private sends without a fee are still allowed, so a recipient can receive unapproved money; it stays unapproved and can only exit to the original depositor.
+- The owner can turn `complianceRequired` off (then payouts don't need a proof), and sets the `aspPostman` that publishes the list.
+
+```bash
+npx hardhat run scripts/asp-update.js --network robinhoodTestnet   # publish the set (as aspPostman)
+```
+
 ## Layout
 
 ```
@@ -111,7 +125,7 @@ Host `webapp/dist/` on any static host (Vercel, Netlify, Cloudflare Pages, GitHu
 ## Safety design
 
 - **Not upgradeable.** Verifier and hasher are fixed at deploy.
-- **Admin can't touch funds.** The owner can allowlist assets and cap deposit size; the guardian can pause new deposits. Nothing can block a withdrawal.
+- **Admin can't touch funds.** The owner can allowlist assets, cap deposit size and require compliance; the guardian can pause new deposits. Nobody can stop you getting your money back: unapproved money can always exit to the wallet that deposited it.
 - **Per-asset deposit caps** keep risk small while the pool is young.
 - **Fee-on-transfer tokens are rejected** so the pool's balance always matches its notes.
 
@@ -120,7 +134,7 @@ Host `webapp/dist/` on any static host (Vercel, Netlify, Cloudflare Pages, GitHu
 1. **Trusted-setup ceremony**: phase 2 with outside contributors on top of a public phase-1 ptau. Regenerate `Verifier.sol` from the final key.
 2. **Audit** of circuits and contracts by a ZK-specialized firm.
 3. **Relayer hardening**: fees from a price feed, persistent job store, more than one independent relayer.
-4. **Compliance layer**: association-set proofs (Privacy Pools style) so users can prove their funds aren't from flagged deposits.
+4. **Compliance policy**: the association-set mechanism is built; the screening policy (who runs it, which lists, delays, appeals) needs a real provider and legal input.
 5. **Legal review**: private holdings of tokenized securities need a lawyer's sign-off.
 6. **Web app**: wallet, note scanning, deposit/send/withdraw, view-key export.
 

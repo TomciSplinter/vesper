@@ -2,10 +2,10 @@
   "network": "robinhoodTestnet",
   "chainId": 46630,
   "deployer": "0x0c155951c104aC663F97967959a75A7fB1A3C1B3",
-  "deployBlock": 140247715,
-  "hasher": "0x92648D1f63fe3317065CC0c8b3694e2855d3DB42",
-  "verifier": "0xFe115B3301bb0d4c66201c4202756A1a66de81bC",
-  "pool": "0x163BDa760077E965beB13570222C2267aD2A3957",
+  "deployBlock": 140286311,
+  "hasher": "0x08378A9f6e781102bfc433b1cec923D8CC85a0a5",
+  "verifier": "0x2fc39a50496bFF439b959589ad0D00F406db8b86",
+  "pool": "0x0c350E68C861b01E4Ac7bbf895C3e0f0e8b7f424",
   "assets": [
     "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112:1000"
   ],

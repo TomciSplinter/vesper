@@ -68,11 +68,21 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 - Founder's wallet `0x1710…e2dd` got 100 vTSLA. On a phone, at vesper.markets: deposited 10 (tx `0x90976d…951c`), then withdrew 5 through the Vercel relayer to `0xE345…aa03` (tx `0x4715a6…2817`, sent by the relayer wallet, so the founder's wallet doesn't appear). **Works end to end.**
 - `/api/health` always returns 200 with relayer status and which settings are present (names only), useful after changing Vercel env vars.
 
+## Compliance: association sets (21 Oct 2026)
+- Circuit (17,740 constraints, 11 public inputs: root, publicAmount, extDataHash, asset, newLabel, aspRoot, exitLabel, 2 nullifiers, 2 commitments): notes are `Poseidon(amount, pubkey, blinding, asset, label)`. Deposits get a pool-assigned `newLabel` and may not spend notes (`newLabel * sumIns === 0`); other txs keep the inputs' label. Payouts prove `label ∈ aspRoot` tree (depth 20) or `exitLabel == label`.
+- VesperPool: `nextDepositLabel(depositor)` (keccak of chain, pool, depositor, nonce), `depositorOf(label)`, `NewDeposit` event, `updateAssociationSet(root, labels, uri)` by `aspPostman` (current + previous root accepted), `complianceRequired` (default on). Any payout (extAmount < 0 or fee > 0) needs an accepted aspRoot, or an exit: no fee, recipient = depositor. Transfers with no fee need neither.
+- Client: `Utxo.label`; `prepareTransaction({ depositor, asp, exit })`; `fetchAssociationSet` rebuilds the list from the latest event and checks it against the on-chain root; `selectNotes` keeps to one label; `NotApprovedError`. `src/asp.js` (fetchDeposits, approvedLabels, associationTree), `relayer/aspUpdate.js`, `scripts/asp-update.js`, `api/asp-update.js`.
+- Fixed along the way: event lookups used ethers' cached block number and could miss a tx that had just landed (`src/events.js` now asks up to "latest").
+- Web app: "N waiting for approval" per stock; withdrawals use approved money only; "Return to depositing wallet" for the rest; relayed sends need approved money.
+- Tests: 48 Hardhat tests (14 in `test/compliance.test.js`: made-up sets, fee laundering, borrowing a label via deposit+spend at the circuit level, the label following a transfer, exits) and 22 browser checks. Live testnet: smoke test and app check both PASSED.
+- New testnet pool `0x0c350E68C861b01E4Ac7bbf895C3e0f0e8b7f424` (verifier `0x2fc39a50496bFF439b959589ad0D00F406db8b86`, deploy block 140286311), same vTSLA. `aspPostman` = relayer wallet `0x6aEB…d912`. Previous pool `0x163B…3957` abandoned.
+- Open questions for the real thing: who runs the screener and with which lists, approval delay, appeals, and whether the screener should also cover deposits. The recipient of unapproved money can only exit it to the original depositor; the app should warn about this before accepting.
+
 ## Next steps
 1. ~~`npm install`, install circom, `npm run build`, `npm test`; fix whatever fails.~~ Done.
 2. Deploy to Robinhood Chain testnet with a real stock token address.
 3. ~~Relayer service~~ and ~~web app~~ v0.1 done (see above). Web app hosted on Vercel at vesper.markets. ~~View-key spent-status gap~~ fixed. Relayer runs as Vercel functions at vesper.markets/api (see below). Relayer hardening before mainnet: price-feed fees, persistent jobs, run it on a real server, several operators.
-4. Compliance: association-set proofs (Privacy Pools style).
+4. ~~Compliance: association-set proofs (Privacy Pools style).~~ Mechanism done (see above); the screening policy and provider are still open.
 5. Trusted-setup ceremony with outside contributors, ZK audit, legal review (private holdings of tokenized securities), then mainnet with small deposit caps. Token launch last.
 
 ## Working style

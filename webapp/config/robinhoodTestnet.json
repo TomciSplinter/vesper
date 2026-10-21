@@ -4,8 +4,8 @@
   "chainName": "Robinhood Chain Testnet",
   "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
   "explorer": "https://explorer.testnet.chain.robinhood.com",
-  "pool": "0x163BDa760077E965beB13570222C2267aD2A3957",
-  "deployBlock": 140247715,
+  "pool": "0x0c350E68C861b01E4Ac7bbf895C3e0f0e8b7f424",
+  "deployBlock": 140286311,
   "assets": [
     {
       "address": "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112",
@@ -15,5 +15,6 @@
   ],
   "relayers": [
     "/api"
-  ]
+  ],
+  "aspUpdateUrl": "/api/asp-update"
 }
