@@ -41,3 +41,25 @@ describe("Client helpers", function () {
     expect(selectNotes(notes, 29)).to.equal(null);
   });
 });
+
+describe("Relayer client", function () {
+  it("keeps waiting when a just-sent transaction isn't visible yet (404), then confirms", async function () {
+    const { relayTransaction } = require("../src");
+    const http = require("http");
+    let polls = 0;
+    const server = http.createServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      if (req.url.endsWith("/relay")) return res.end(JSON.stringify({ id: "0x" + "ab".repeat(32) }));
+      polls++;
+      if (polls < 3) return (res.statusCode = 404), res.end(JSON.stringify({ error: "not found" }));
+      res.end(JSON.stringify({ status: "confirmed", txHash: "0x" + "ab".repeat(32) }));
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const url = `http://127.0.0.1:${server.address().port}/api`;
+    const prepared = { args: { publicAmount: 0n }, extData: { extAmount: 0n, fee: 0n } };
+    const job = await relayTransaction(url, prepared, "0x" + "00".repeat(20), { pollMs: 10 });
+    server.close();
+    expect(job.status).to.equal("confirmed");
+    expect(polls).to.equal(3);
+  });
+});

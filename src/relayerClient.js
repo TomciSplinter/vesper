@@ -16,7 +16,7 @@ const endpoint = (base, p) => String(base).replace(/\/+$/, "") + p;
 async function call(url, opts) {
   const res = await fetch(url, opts);
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`relayer: ${body.error || res.status}`);
+  if (!res.ok) throw Object.assign(new Error(`relayer: ${body.error || res.status}`), { status: res.status });
   return body;
 }
 
@@ -37,7 +37,18 @@ async function relayTransaction(relayerUrl, prepared, asset, { pollMs = 1000, ti
   });
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const job = await call(endpoint(relayerUrl, `/jobs/${id}`));
+    let job;
+    try {
+      job = await call(endpoint(relayerUrl, `/jobs/${id}`));
+    } catch (err) {
+      // A just-sent transaction may not be visible yet on the node that answers
+      // (public RPCs sit behind load balancers), or the network hiccuped: keep waiting.
+      if (err.status === 404 || err.status === undefined || err.status >= 500) {
+        await new Promise((r) => setTimeout(r, pollMs));
+        continue;
+      }
+      throw err;
+    }
     if (job.status === "confirmed") return { id, ...job };
     if (job.status === "failed") throw new Error(`relayer: transaction failed (${job.error || "reverted"})`);
     await new Promise((r) => setTimeout(r, pollMs));
