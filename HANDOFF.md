@@ -64,6 +64,10 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 - Tests: `test/serverless.test.js` (4). A late double-spend found by simulation now reports 409 "note already spent".
 - Serverless limits: no shared memory, so no cross-request rate limit or in-flight note lock (two simultaneous requests for the same note can both be sent and the second reverts on-chain, costing the relayer gas), and simultaneous sends can collide on nonce (one fails; the user retries). Fine for testnet; before mainnet use a single long-running relayer (`npm run relayer`) or add a shared store (e.g. Vercel KV) for nonces and locks. Keep the relayer wallet topped up; each relay costs ~0.0000116 ETH at testnet gas prices.
 
+## First real user test (21 Oct 2026)
+- Founder's wallet `0x1710…e2dd` got 100 vTSLA. On a phone, at vesper.markets: deposited 10 (tx `0x90976d…951c`), then withdrew 5 through the Vercel relayer to `0xE345…aa03` (tx `0x4715a6…2817`, sent by the relayer wallet, so the founder's wallet doesn't appear). **Works end to end.**
+- `/api/health` always returns 200 with relayer status and which settings are present (names only), useful after changing Vercel env vars.
+
 ## Next steps
 1. ~~`npm install`, install circom, `npm run build`, `npm test`; fix whatever fails.~~ Done.
 2. Deploy to Robinhood Chain testnet with a real stock token address.
