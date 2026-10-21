@@ -16,5 +16,7 @@
   "relayers": [
     "/api"
   ],
-  "aspUpdateUrl": "/api/asp-update"
+  "aspUpdateUrl": "/api/asp-update",
+  "wasmUrl": "circuit/transaction2-38b593580b26.wasm",
+  "zkeyUrl": "circuit/transaction2-38b593580b26.zkey"
 }

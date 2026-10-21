@@ -5,6 +5,7 @@ import * as esbuild from "esbuild";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import crypto from "node:crypto";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..");
@@ -43,13 +44,19 @@ await esbuild.build({
 fs.copyFileSync(path.join(here, "app", "styles.css"), path.join(dist, "app.css"));
 fs.copyFileSync(path.join(here, "index.html"), path.join(dist, "index.html"));
 
+// Circuit files are named after a hash of their contents, so a browser can never use a
+// cached copy from an older circuit with a newer app (config.json, never cached, points
+// at the current names).
 const wasm = path.join(root, "build", "transaction2_js", "transaction2.wasm");
 const zkey = path.join(root, "build", "transaction2.zkey");
-for (const f of [wasm, zkey]) {
-  if (!fs.existsSync(f)) throw new Error(`missing ${f}: run npm run build:circuit first`);
-  fs.copyFileSync(f, path.join(dist, "circuit", path.basename(f)));
-}
-fs.copyFileSync(configPath, path.join(dist, "config.json"));
+for (const f of [wasm, zkey]) if (!fs.existsSync(f)) throw new Error(`missing ${f}: run npm run build:circuit first`);
+const hash = crypto.createHash("sha256").update(fs.readFileSync(wasm)).update(fs.readFileSync(zkey)).digest("hex").slice(0, 12);
+const wasmName = `circuit/transaction2-${hash}.wasm`;
+const zkeyName = `circuit/transaction2-${hash}.zkey`;
+fs.copyFileSync(wasm, path.join(dist, wasmName));
+fs.copyFileSync(zkey, path.join(dist, zkeyName));
+const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+fs.writeFileSync(path.join(dist, "config.json"), JSON.stringify({ ...config, wasmUrl: wasmName, zkeyUrl: zkeyName }, null, 2) + "\n");
 
 const size = (f) => (fs.statSync(path.join(dist, f)).size / 1e6).toFixed(1) + " MB";
-console.log(`Built webapp/dist with ${path.relative(root, configPath)}: app.js ${size("app.js")}, proving key ${size("circuit/transaction2.zkey")}`);
+console.log(`Built webapp/dist with ${path.relative(root, configPath)}: app.js ${size("app.js")}, proving key ${size(zkeyName)} (${hash})`);
