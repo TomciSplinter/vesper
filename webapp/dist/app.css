@@ -67,3 +67,61 @@ textarea { resize: vertical; font-family: ui-monospace, Menlo, monospace; font-s
 @keyframes spin { to { transform: rotate(360deg); } }
 footer { text-align: center; margin-top: 28px; }
 @media (min-width: 560px) { .overlay { align-items: center; } }
+
+/* ------------------------------------------------------------------ desktop
+   The logo's horizon becomes the page structure: what's public sits above the
+   line, what's private sits below it. */
+.horizon-demo { display: none; }
+:focus-visible { outline: 2px solid var(--violet); outline-offset: 2px; }
+
+@media (min-width: 960px) {
+  .shell { max-width: 1120px; padding: 24px 40px 48px; }
+  header { padding-bottom: 24px; }
+  .banner { max-width: none; }
+
+  /* Welcome: copy left, horizon picture right */
+  .welcome { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 72px; align-items: center; text-align: left; padding: 56px 0 24px; }
+  .welcome-copy { max-width: 30rem; }
+  .welcome h1 { font-size: 52px; line-height: 1.08; letter-spacing: -0.02em; margin: 24px 0 16px; }
+  .welcome .lead { font-size: 17px; }
+  .welcome .btn.wide { width: auto; padding: 14px 32px; }
+  .welcome .link { margin-left: -4px; }
+
+  .horizon-demo { display: block; margin: 0; padding: 36px 40px; border-radius: 28px; background: linear-gradient(180deg, var(--navy-2) 0%, var(--navy-2) 50%, #10122a 50%, var(--navy) 100%); border: 1px solid var(--line); }
+  .horizon-demo ul { list-style: none; margin: 0; padding: 0; }
+  .horizon-demo li { padding: 10px 0; font-size: 15px; }
+  .horizon-demo .above li { color: var(--ink); border-bottom: 1px solid var(--line); }
+  .horizon-demo .above li:last-child { border-bottom: none; }
+  .horizon-demo .who { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: var(--muted); }
+  .horizon-demo .below li { color: var(--violet); }
+  .horizon-demo .below li:nth-child(1) { opacity: 0.85; }
+  .horizon-demo .below li:nth-child(2) { opacity: 0.55; }
+  .horizon-demo .below li:nth-child(3) { opacity: 0.3; }
+  .above-label, .below-label { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+  .below-label { margin: 8px 0 0; }
+  .horizon-line { position: relative; height: 2px; background: var(--ink); margin: 22px 0; border-radius: 2px; }
+  .horizon-line svg { position: absolute; right: 8%; top: -34px; }
+
+  /* Signed in: public band, horizon rule, private grid */
+  .desk { display: block; }
+  .public-band { display: grid; grid-template-columns: auto 1fr auto; gap: 32px; align-items: center; padding: 8px 4px 20px; }
+  .public-band h2 { margin: 0; }
+  .public-band p { margin: 2px 0 0; }
+  .public-band code { color: var(--muted); font-size: 13px; justify-self: start; }
+  .public-assets { display: flex; gap: 28px; }
+  .pub-asset { display: flex; gap: 10px; align-items: baseline; font-variant-numeric: tabular-nums; }
+  .pub-asset strong { font-size: 18px; font-weight: 600; }
+
+  .horizon-rule { display: flex; align-items: center; gap: 14px; margin: 0 0 28px; color: var(--muted); font-size: 12px; }
+  .horizon-rule::before, .horizon-rule::after { content: ""; height: 2px; background: var(--ink); border-radius: 2px; flex: 1; }
+  
+
+
+  .private-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .private-side .card:first-child { padding: 24px; }
+  .private-side .card:first-child .amt { font-size: 34px; }
+  .action-side .tabs { grid-template-columns: repeat(3, 1fr); margin-top: 0; }
+  .action-side .tabs button { font-size: 14px; padding: 10px 4px; }
+  .action-side .card { padding: 24px; }
+  footer { margin-top: 48px; }
+}

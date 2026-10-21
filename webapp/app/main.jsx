@@ -19,6 +19,19 @@ function Logo({ size = 28 }) {
   );
 }
 
+// Desktop layout from 960px; phones keep the single column.
+function useWide() {
+  const q = "(min-width: 960px)";
+  const [wide, setWide] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
+  useEffect(() => {
+    const m = window.matchMedia(q);
+    const on = () => setWide(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return wide;
+}
+
 const short = (s, a = 6, b = 4) => (s && s.length > a + b + 3 ? `${s.slice(0, a)}…${s.slice(-b)}` : s);
 
 function Copy({ text, label = "Copy" }) {
@@ -87,6 +100,7 @@ function Welcome({ vesper, onUnlocked, onError }) {
 
   return (
     <div className="welcome">
+      <div className="welcome-copy">
       <Logo size={72} />
       <h1>Hold stocks privately.</h1>
       <p className="lead">
@@ -120,11 +134,57 @@ function Welcome({ vesper, onUnlocked, onError }) {
           </button>
         </div>
       )}
+      </div>
+      <HorizonDemo />
     </div>
   );
 }
 
-function Balances({ vesper, data, onRefresh, refreshing }) {
+// Desktop welcome picture: the logo's horizon, with what the chain sees above it
+// and what stays private below it.
+function HorizonDemo() {
+  return (
+    <figure className="horizon-demo" aria-label="What's public and what's private with Vesper">
+      <figcaption className="above-label">What anyone on the chain can see</figcaption>
+      <ul className="above">
+        <li><span className="who">0x7099…79C8</span> put 100 vTSLA into Vesper</li>
+        <li>Vesper paid 20 vTSLA to <span className="who">0x55c1…eB6c</span></li>
+      </ul>
+      <div className="horizon-line" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 1 L14 10 L23 12 L14 14 L12 23 L10 14 L1 12 L10 10 Z" fill="var(--gold)" /></svg>
+      </div>
+      <ul className="below">
+        <li>You hold 44 vTSLA</li>
+        <li>You sent 30 vTSLA to Bob</li>
+        <li>That 20 vTSLA was your withdrawal</li>
+      </ul>
+      <p className="below-label">What only you, and anyone you give your view key, can see</p>
+    </figure>
+  );
+}
+
+// Desktop: the public side of the account, shown above the horizon.
+function PublicBand({ vesper, data }) {
+  return (
+    <section className="public-band" aria-label="Your public wallet">
+      <div>
+        <h2>Your wallet</h2>
+        <p className="muted small">Public. Anyone can see this address and its balance.</p>
+      </div>
+      <code className="mono">{vesper.account}</code>
+      <div className="public-assets">
+        {(data?.byAsset || []).map(({ asset, walletBalance }) => (
+          <div key={asset.address} className="pub-asset">
+            <span className="muted">{asset.symbol}</span>
+            <strong>{walletBalance === null ? "–" : fmt(walletBalance)}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Balances({ vesper, data, onRefresh, refreshing, wide }) {
   return (
     <section className="card">
       <div className="row between">
@@ -144,7 +204,7 @@ function Balances({ vesper, data, onRefresh, refreshing }) {
               <div className="sym">{asset.symbol}</div>
               <div className="muted small">
                 {notes.length} note{notes.length === 1 ? "" : "s"}
-                {walletBalance !== null ? ` · wallet ${fmt(walletBalance)}` : ""}
+                {walletBalance !== null && !wide ? `, wallet ${fmt(walletBalance)}` : ""}
               </div>
             </div>
             <div className="amt">
@@ -317,6 +377,10 @@ function App() {
   const [data, setData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState(null);
+  const wide = useWide();
+  useEffect(() => {
+    if (wide && (tab === "receive" || tab === "viewkey")) setTab("deposit");
+  }, [wide, tab]);
 
   useEffect(() => {
     Vesper.load().then(setVesper).catch((e) => setLoadError(friendly(e)));
@@ -358,12 +422,11 @@ function App() {
         ["deposit", "Deposit"],
         ["send", "Send"],
         ["withdraw", "Withdraw"],
-        ["receive", "Receive"],
-        ["viewkey", "View key"],
+        ...(wide ? [] : [["receive", "Receive"], ["viewkey", "View key"]]),
       ];
 
   return (
-    <div className="shell">
+    <div className={`shell${wide ? " is-wide" : ""}`}>
       <header>
         <div className="brand">
           <Logo />
@@ -392,22 +455,36 @@ function App() {
       {!unlocked ? (
         <Welcome vesper={vesper} onUnlocked={() => setUnlocked(true)} onError={(e) => setProgress({ status: "error", error: friendly(e) })} />
       ) : (
-        <main>
-          <Balances vesper={vesper} data={data} onRefresh={refresh} refreshing={refreshing} />
-          {tabs.length > 0 && (
-            <nav className="tabs">
-              {tabs.map(([k, label]) => (
-                <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>
-                  {label}
-                </button>
-              ))}
-            </nav>
+        <main className={wide ? "desk" : ""}>
+          {wide && !vesper.viewOnly && <PublicBand vesper={vesper} data={data} />}
+          {wide && (
+            <div className="horizon-rule" aria-hidden="true">
+              <span>Above: public</span>
+              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 1 L14 10 L23 12 L14 14 L12 23 L10 14 L1 12 L10 10 Z" fill="var(--gold)" /></svg>
+              <span>Below: private</span>
+            </div>
           )}
-          {!vesper.viewOnly && ["deposit", "send", "withdraw"].includes(tab) && (
-            <ActionForm key={tab} vesper={vesper} kind={tab} data={data} run={run} />
-          )}
-          {!vesper.viewOnly && tab === "receive" && <Receive vesper={vesper} />}
-          {!vesper.viewOnly && tab === "viewkey" && <ViewKey vesper={vesper} />}
+          <div className="private-grid">
+            <div className="private-side">
+              <Balances vesper={vesper} data={data} onRefresh={refresh} refreshing={refreshing} wide={wide} />
+              {wide && !vesper.viewOnly && <Receive vesper={vesper} />}
+              {wide && !vesper.viewOnly && <ViewKey vesper={vesper} />}
+            </div>
+            {!vesper.viewOnly && (
+              <div className="action-side">
+                <nav className="tabs">
+                  {tabs.map(([k, label]) => (
+                    <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>
+                      {label}
+                    </button>
+                  ))}
+                </nav>
+                {["deposit", "send", "withdraw"].includes(tab) && <ActionForm key={tab} vesper={vesper} kind={tab} data={data} run={run} />}
+                {!wide && tab === "receive" && <Receive vesper={vesper} />}
+                {!wide && tab === "viewkey" && <ViewKey vesper={vesper} />}
+              </div>
+            )}
+          </div>
         </main>
       )}
 

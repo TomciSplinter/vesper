@@ -167,6 +167,14 @@ async function main() {
   await page.goto(`http://127.0.0.1:${APP_PORT}/`);
   await page.waitForSelector('[data-testid="unlock"]');
   await page.screenshot({ path: path.join(shots, "1-welcome.png") });
+  const desktop = async (name) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(shots, name) });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(300);
+  };
+  await desktop("desk-1-welcome.png");
 
   await page.click('[data-testid="unlock"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="private-vTSLA"]')?.textContent === "0");
@@ -181,6 +189,9 @@ async function main() {
   check((await privateBalance()) === e(100), "deposit 100 → private balance 100");
   check((await token.balanceOf(userAddr)) === e(400), "wallet went from 500 to 400 vTSLA");
   await page.screenshot({ path: path.join(shots, "3-balance.png") });
+  await page.click('[data-testid="tab-send"]');
+  await desktop("desk-2-account.png");
+  await page.click('[data-testid="tab-deposit"]');
 
   // Private send through the relayer
   const bob = new Keypair();
