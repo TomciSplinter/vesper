@@ -81,7 +81,7 @@ export RH_TESTNET_RPC=... RH_TESTNET_CHAIN_ID=... DEPLOYER_KEY=...
 ASSETS="0xStockToken:1000" npx hardhat run scripts/deploy.js --network robinhoodTestnet
 ```
 
-The deploy script refuses mainnet unless you confirm the ceremony was run. On a testnet, `MOCK_TOKEN="vTSLA:1000"` also deploys a stand-in stock token. Addresses are saved to `deployments/<network>.json`.
+The deploy script refuses mainnet unless `contracts/Verifier.sol` and the proving key match the ceremony's final key (recorded in `ceremony/final.json` by `scripts/import-ceremony.js`). On a testnet, `MOCK_TOKEN="vTSLA:1000"` also deploys a stand-in stock token. Addresses are saved to `deployments/<network>.json`.
 
 ## Relayer
 
@@ -140,7 +140,7 @@ Host `webapp/dist/` on any static host (Vercel, Netlify, Cloudflare Pages, GitHu
 
 ## Before mainnet
 
-1. **Trusted-setup ceremony**: phase 2 with outside contributors on top of a public phase-1 ptau. Regenerate `Verifier.sol` from the final key.
+1. **Trusted-setup ceremony**: tooling is in the public `vesper-ceremony` repo (phase 2 with outside contributors on top of the Hermez phase-1 ptau, each contribution checked by GitHub Actions, sealed with a public beacon). When it's finalized, `node scripts/import-ceremony.js ../vesper-ceremony` switches this repo to the final key.
 2. **Audit** of circuits and contracts by a ZK-specialized firm.
 3. **Relayer hardening**: fees from a price feed, persistent job store, more than one independent relayer.
 4. **Compliance policy**: the association-set mechanism is built; the screening policy (who runs it, which lists, delays, appeals) needs a real provider and legal input.

@@ -2,20 +2,33 @@
 //   ASSETS="0xTokenA:1000,0xTokenB:500" npx hardhat run scripts/deploy.js --network robinhoodTestnet
 // Each asset is "address:maxDepositPerTx" in whole tokens (18 decimals).
 //
-// Uses the Groth16Verifier generated from build/transaction2.zkey. That key is a
-// DEV key until you run a real ceremony. Do not deploy it to mainnet.
+// Uses the Groth16Verifier in contracts/Verifier.sol. On mainnet it must be the one from the
+// public ceremony (scripts/import-ceremony.js records its hash in ceremony/final.json).
 const { ethers, network } = require("hardhat");
 const { poseidonContract } = require("circomlibjs");
 const { MERKLE_TREE_HEIGHT } = require("../src/constants");
+
+function checkCeremonyKey() {
+  const fs = require("fs");
+  const path = require("path");
+  const crypto = require("crypto");
+  const root = path.join(__dirname, "..");
+  const sha = (f) => crypto.createHash("sha256").update(fs.readFileSync(path.join(root, f))).digest("hex");
+  const recordFile = path.join(root, "ceremony", "final.json");
+  if (!fs.existsSync(recordFile)) throw new Error("Refusing mainnet deploy: no ceremony key imported (run scripts/import-ceremony.js).");
+  const rec = JSON.parse(fs.readFileSync(recordFile, "utf8"));
+  if (rec.dryRun) throw new Error("Refusing mainnet deploy: the imported key is from a dry run.");
+  if (sha("contracts/Verifier.sol") !== rec.verifierSol || sha("build/transaction2.zkey") !== rec.zkey) {
+    throw new Error("Refusing mainnet deploy: Verifier.sol or the proving key don't match the ceremony's final key.");
+  }
+}
 
 async function main() {
   const [deployer] = await ethers.getSigners();
   // Guard by chain id, not network name, so a renamed network can't skip it.
   const MAINNET_CHAIN_ID = 4663n; // Robinhood Chain mainnet
   const onMainnet = (await ethers.provider.getNetwork()).chainId === MAINNET_CHAIN_ID;
-  if (onMainnet && process.env.I_RAN_THE_CEREMONY !== "yes") {
-    throw new Error("Refusing mainnet deploy with a dev proving key. Run the ceremony, regenerate Verifier.sol, then set I_RAN_THE_CEREMONY=yes.");
-  }
+  if (onMainnet) checkCeremonyKey();
   console.log(`Deploying to ${network.name} from ${deployer.address}`);
 
   const hasher = await new ethers.ContractFactory(poseidonContract.generateABI(2), poseidonContract.createCode(2), deployer).deploy();

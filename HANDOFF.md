@@ -16,7 +16,7 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 ## State of the code (v0.1)
 - Written but **never compiled or run**: the first workspace had no network access. Only checks done: JS syntax, and a simulation proving the Merkle tree logic matches across contract, JS client and circuit.
 - Stack: Circom 2.1.6 + snarkjs Groth16, Hardhat 2 + ethers 6, OpenZeppelin 5, circomlibjs Poseidon, tweetnacl for note encryption.
-- The proving key from `build-circuit.sh` is a **dev key** (forgeable). deploy.js refuses mainnet without `I_RAN_THE_CEREMONY=yes`.
+- The proving key from `build-circuit.sh` is a **dev key** (forgeable). deploy.js refuses mainnet unless Verifier.sol and the zkey match `ceremony/final.json` (written by `scripts/import-ceremony.js` from the finalized `vesper-ceremony` repo).
 
 ## First build and test run (21 Oct 2026)
 - `npm install`, circom 2.1.9, `npm run build` and `npm test` all succeeded. **14/14 tests pass with real Groth16 proofs. No code changes were needed.**
@@ -103,3 +103,11 @@ Context from the chat where this project started (21 Oct 2026). Read this and RE
 
 ## Working style
 The founder is non-technical-leaning and on mobile: explain plainly, keep replies short, avoid jargon.
+
+## Trusted-setup ceremony (set up)
+
+- Public repo `TomciSplinter/vesper-ceremony` (staged at `../vesper-ceremony`): circuit source + `transaction2.r1cs` (recompiles byte-identical with circom 2.1.9), scripts `contribute / verify (--pr, --all) / finalize / verify-final`, snarkjs 0.7.6 pinned.
+- Phase 1: Hermez `powersOfTau28_hez_final_15.ptau`, checked against the blake2b hash in the snarkjs README. The sandbox can't download it; the *Start ceremony* GitHub Action builds `0000.zkey` in public instead.
+- Each contribution PR is checked by the *Verify ceremony* Action: only the next `NNNN.zkey` + attestation, valid against r1cs + phase 1, and it must contain every earlier contribution.
+- Finish: announce a future drand round as the beacon, `npm run finalize -- <hex> "<source>"`, then here `node scripts/import-ceremony.js ../vesper-ceremony`, compile, test, rebuild the web app, deploy.
+- Dry run (dev phase 1, 3 contributors + beacon) passed end to end, including the full test suite on the resulting key.

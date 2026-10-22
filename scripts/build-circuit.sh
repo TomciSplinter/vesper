@@ -27,6 +27,12 @@ if [ ! -f "$BUILD/pot${PTAU_POWER}_final.ptau" ]; then
   $SNARKJS powersoftau prepare phase2 "$BUILD/pot_0001.ptau" "$BUILD/pot${PTAU_POWER}_final.ptau"
 fi
 
+if [ -f ceremony/final.json ] && [ -f "$BUILD/${CIRCUIT}.zkey" ] && \
+   [ "$(sha256sum "$BUILD/${CIRCUIT}.zkey" | cut -d' ' -f1)" = "$(node -p 'require("./ceremony/final.json").zkey')" ]; then
+  echo "==> Keeping the ceremony key in $BUILD/${CIRCUIT}.zkey (delete ceremony/final.json to go back to a dev key)"
+  exit 0
+fi
+
 echo "==> DEV phase-2 setup (insecure)"
 $SNARKJS groth16 setup "$BUILD/${CIRCUIT}.r1cs" "$BUILD/pot${PTAU_POWER}_final.ptau" "$BUILD/${CIRCUIT}_0000.zkey"
 $SNARKJS zkey contribute "$BUILD/${CIRCUIT}_0000.zkey" "$BUILD/${CIRCUIT}.zkey" --name="dev" -e="$(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')"
