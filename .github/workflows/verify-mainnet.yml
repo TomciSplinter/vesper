@@ -1,0 +1,24 @@
+name: Verify mainnet source
+# Publishes the source of the mainnet verifier and pool on robinhoodchain.blockscout.com.
+# Verifier.sol comes from the public ceremony repo and must match ceremony/final.json.
+on: workflow_dispatch
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --ignore-scripts
+      - name: Get the ceremony Verifier.sol
+        run: |
+          curl -fsSL -o contracts/Verifier.sol https://raw.githubusercontent.com/TomciSplinter/vesper-ceremony/main/final/Verifier.sol
+          want=$(node -p 'require("./ceremony/final.json").verifierSol')
+          got=$(sha256sum contracts/Verifier.sol | cut -d' ' -f1)
+          [ "$want" = "$got" ] || { echo "::error::Verifier.sol doesn't match ceremony/final.json"; exit 1; }
+      - run: npx hardhat compile
+      - name: Verify verifier
+        run: npx hardhat verify --network robinhood $(node -p 'require("./deployments/robinhood.json").verifier') || true
+      - name: Verify pool
+        run: npx hardhat verify --network robinhood --constructor-args scripts/verify-args.js $(node -p 'require("./deployments/robinhood.json").pool')

@@ -17,10 +17,22 @@ module.exports = {
       accounts,
     },
     robinhood: {
-      url: process.env.RH_MAINNET_RPC || "",
-      chainId: process.env.RH_MAINNET_CHAIN_ID ? Number(process.env.RH_MAINNET_CHAIN_ID) : undefined,
+      url: process.env.RH_MAINNET_RPC || "https://rpc.mainnet.chain.robinhood.com",
+      chainId: 4663,
       accounts,
     },
   },
+  // Source verification on the Robinhood Chain Blockscout explorer (no API key needed).
+  etherscan: {
+    apiKey: { robinhood: "blockscout" },
+    customChains: [
+      {
+        network: "robinhood",
+        chainId: 4663,
+        urls: { apiURL: "https://robinhoodchain.blockscout.com/api", browserURL: "https://robinhoodchain.blockscout.com" },
+      },
+    ],
+  },
+  sourcify: { enabled: false },
   mocha: { timeout: 600000 },
 };
