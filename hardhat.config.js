@@ -33,6 +33,6 @@ module.exports = {
       },
     ],
   },
-  sourcify: { enabled: false },
+  sourcify: { enabled: true },
   mocha: { timeout: 600000 },
 };
