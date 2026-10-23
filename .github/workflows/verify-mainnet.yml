@@ -20,6 +20,7 @@ jobs:
       - run: npx hardhat compile
       - name: Verify verifier and pool
         run: |
+          set +e
           note() { echo "::notice title=$1::$(tail -c 900 "$2" | tr '\n' ' ')"; }
           npx hardhat verify --network robinhood $(node -p 'require("./deployments/robinhood.json").verifier') > v.log 2>&1; a=$?
           note "verifier exit $a" v.log
