@@ -45,7 +45,10 @@ export const fmt = (raw, dp = 4) => {
   return frac ? `${i}.${frac}` : i;
 };
 export const parseAmount = (s) => {
-  const v = parseUnits(String(s).trim() || "0", DECIMALS);
+  // Accept a decimal comma (European keyboards type "0,07") and stray spaces.
+  const t = String(s).trim().replace(/\s/g, "").replace(",", ".");
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(t || "0")) throw new Error("Enter a number, like 0.5");
+  const v = parseUnits(t || "0", DECIMALS);
   if (v <= 0n) throw new Error("Enter an amount above zero.");
   return v;
 };
