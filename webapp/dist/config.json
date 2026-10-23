@@ -1,21 +1,76 @@
 {
-  "testnet": true,
-  "chainId": 46630,
-  "chainName": "Robinhood Chain Testnet",
-  "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
-  "explorer": "https://explorer.testnet.chain.robinhood.com",
-  "pool": "0x35AA1f9D4CbD2882288F5F39892fD4cE1f9AFd22",
-  "deployBlock": 141470125,
+  "testnet": false,
+  "chainId": 4663,
+  "chainName": "Robinhood Chain",
+  "rpcUrl": "https://rpc.mainnet.chain.robinhood.com",
+  "explorer": "https://robinhoodchain.blockscout.com",
+  "pool": "0x0f52ed18CBCE672dcBb51dD2554Cc469054EE026",
+  "deployBlock": 96303874,
   "assets": [
     {
-      "address": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
+      "address": "0x322F0929c4625eD5bAd873c95208D54E1c003b2d",
       "symbol": "TSLA",
-      "name": "Tesla (Robinhood testnet Stock Token)"
+      "name": "Tesla (Robinhood Stock Token)"
     },
     {
-      "address": "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112",
-      "symbol": "vTSLA",
-      "name": "vTSLA (Vesper test stand-in)"
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "symbol": "NVDA",
+      "name": "NVIDIA (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9",
+      "symbol": "AAPL",
+      "name": "Apple (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xe93237C50D904957Cf27E7B1133b510C669c2e74",
+      "symbol": "MSFT",
+      "name": "Microsoft (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x12f190a9F9d7D37a250758b26824B97CE941bF54",
+      "symbol": "AMZN",
+      "name": "Amazon (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+      "symbol": "GOOGL",
+      "name": "Alphabet Class A (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35",
+      "symbol": "META",
+      "name": "Meta Platforms (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x6330D8C3178a418788dF01a47479c0ce7CCF450b",
+      "symbol": "COIN",
+      "name": "Coinbase (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC",
+      "symbol": "AMD",
+      "name": "AMD (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xc72b96e0E48ecd4DC75E1e45396e26300BC39681",
+      "symbol": "INTC",
+      "name": "Intel (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+      "symbol": "MU",
+      "name": "Micron Technology (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C",
+      "symbol": "SPY",
+      "name": "SPDR S&P 500 ETF Trust (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xD5f3879160bc7c32ebb4dC785F8a4F505888de68",
+      "symbol": "QQQ",
+      "name": "Invesco QQQ (Robinhood Stock Token)"
     }
   ],
   "relayers": [
@@ -23,9 +78,21 @@
   ],
   "aspUpdateUrl": "/api/asp-update",
   "maxRelayerFees": {
-    "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E": "0.05",
-    "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112": "0.5"
+    "0x322F0929c4625eD5bAd873c95208D54E1c003b2d": "0.013",
+    "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC": "0.024",
+    "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9": "0.014",
+    "0xe93237C50D904957Cf27E7B1133b510C669c2e74": "0.0095",
+    "0x12f190a9F9d7D37a250758b26824B97CE941bF54": "0.02",
+    "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3": "0.016",
+    "0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35": "0.0077",
+    "0x6330D8C3178a418788dF01a47479c0ce7CCF450b": "0.03",
+    "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC": "0.0096",
+    "0xc72b96e0E48ecd4DC75E1e45396e26300BC39681": "0.057",
+    "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD": "0.0057",
+    "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C": "0.0066",
+    "0xD5f3879160bc7c32ebb4dC785F8a4F505888de68": "0.0071"
   },
+  "notice": "Early version: self-audited (findings and fixes published), not externally audited. Deposits are limited to about $2,000 each. Use at your own risk.",
   "wasmUrl": "circuit/transaction2-406e8734918d.wasm",
   "zkeyUrl": "circuit/transaction2-406e8734918d.zkey"
 }

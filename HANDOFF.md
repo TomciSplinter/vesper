@@ -117,3 +117,12 @@ The founder is non-technical-leaning and on mobile: explain plainly, keep replie
 - Phase 2 contributions: Tom, sod, Splinter; sealed with drand quicknet round 33325012 (announced in advance in `final/BEACON.md`), by the *Finalize ceremony* Action. Final zkey sha256 `d5e5d4c3…4923`, Verifier.sol sha256 `55f70ba9…ae94` (recorded in `ceremony/final.json`; mainnet deploy checks them).
 - The sandbox can't download the phase-1 file, so `import-ceremony.js` ran with `SKIP_VERIFY=1`; the Finalize Action ran `verify-final` publicly.
 - 66/66 tests pass on the final key. New testnet pool `0x35AA1f9D4CbD2882288F5F39892fD4cE1f9AFd22` (verifier `0x1EdE5788b5093138Ac4692bE2330adF057086A10`, hasher `0x9d723D94763864E2b06fc1de17474380E161F733`, deploy block 141470125), same TSLA + vTSLA, postman = relayer wallet. Live smoke test (deposit, private transfer, withdraw) PASSED. Previous pool `0x436c…9033` is in `previousPools`.
+
+## Mainnet (Robinhood Chain, chain id 4663)
+
+- Pool `0x0f52ed18CBCE672dcBb51dD2554Cc469054EE026`, verifier `0x7D5D0A1801813f3D47D11353EbE7F5AFd34df939` (bytecode identical to the ceremony's Verifier.sol), hasher `0x20a046e6044839951DDecfbf6bA70b1D8282d8f6`, deploy block 96303874.
+- Owner + guardian: Safe `0x688Bb15968406d889A05baDb599Bae93D6a5476d` (Safe 1.5.0, 2 of 3). aspPostman/relayer: `0x6aEB…d912` (kept from testnet at the founder's choice; its key has been in chat history).
+- 13 assets (TSLA NVDA AAPL MSFT AMZN GOOGL META COIN AMD INTC MU SPY QQQ), addresses checked against api.robinhood.com/rhj/assets and on-chain; caps ~ $2k per deposit and relayer fees ~ $1 (deployments/robinhood.assets.json). Admin changes go through the 3-day delay, executed from the Safe.
+- Fork rehearsal (`scripts/dev/fork-check.js`) passed with real TSLA before the deploy.
+- The relayer and /api/asp-update pick `deployments/robinhood.json` automatically; env RPC_URL/CHAIN_ID are only used if CHAIN_ID matches. The web app builds from `webapp/config/robinhood.json` (`node scripts/mainnet-config.js` regenerates it).
+- Source not yet verified on robinhoodchain.blockscout.com (explorer not reachable from the sandbox).
