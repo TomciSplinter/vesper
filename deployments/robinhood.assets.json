@@ -1,0 +1,99 @@
+{
+  "chainId": 4663,
+  "checkedAt": "2026-10-23T18:55Z",
+  "source": "api.robinhood.com/rhj/assets (official) + on-chain symbol/decimals + simulated transfer into a contract",
+  "targetUsdPerDeposit": 2000,
+  "assets": [
+    {
+      "symbol": "TSLA",
+      "address": "0x322F0929c4625eD5bAd873c95208D54E1c003b2d",
+      "maxDepositTokens": "5.3",
+      "priceUsdAtCheck": "372.32",
+      "capUsdAtCheck": "1973"
+    },
+    {
+      "symbol": "NVDA",
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "maxDepositTokens": "9.4",
+      "priceUsdAtCheck": "211.86",
+      "capUsdAtCheck": "1993"
+    },
+    {
+      "symbol": "AAPL",
+      "address": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9",
+      "maxDepositTokens": "5.7",
+      "priceUsdAtCheck": "346.29",
+      "capUsdAtCheck": "1975"
+    },
+    {
+      "symbol": "MSFT",
+      "address": "0xe93237C50D904957Cf27E7B1133b510C669c2e74",
+      "maxDepositTokens": "3.8",
+      "priceUsdAtCheck": "523.95",
+      "capUsdAtCheck": "1992"
+    },
+    {
+      "symbol": "AMZN",
+      "address": "0x12f190a9F9d7D37a250758b26824B97CE941bF54",
+      "maxDepositTokens": "8",
+      "priceUsdAtCheck": "248.25",
+      "capUsdAtCheck": "1986"
+    },
+    {
+      "symbol": "GOOGL",
+      "address": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+      "maxDepositTokens": "6.2",
+      "priceUsdAtCheck": "321.69",
+      "capUsdAtCheck": "1995"
+    },
+    {
+      "symbol": "META",
+      "address": "0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35",
+      "maxDepositTokens": "3",
+      "priceUsdAtCheck": "644.93",
+      "capUsdAtCheck": "1936"
+    },
+    {
+      "symbol": "COIN",
+      "address": "0x6330D8C3178a418788dF01a47479c0ce7CCF450b",
+      "maxDepositTokens": "12",
+      "priceUsdAtCheck": "165.98",
+      "capUsdAtCheck": "1992"
+    },
+    {
+      "symbol": "AMD",
+      "address": "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC",
+      "maxDepositTokens": "3.8",
+      "priceUsdAtCheck": "519.09",
+      "capUsdAtCheck": "1973"
+    },
+    {
+      "symbol": "INTC",
+      "address": "0xc72b96e0E48ecd4DC75E1e45396e26300BC39681",
+      "maxDepositTokens": "22",
+      "priceUsdAtCheck": "87.03",
+      "capUsdAtCheck": "1915"
+    },
+    {
+      "symbol": "MU",
+      "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+      "maxDepositTokens": "2.2",
+      "priceUsdAtCheck": "881.01",
+      "capUsdAtCheck": "1939"
+    },
+    {
+      "symbol": "SPY",
+      "address": "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C",
+      "maxDepositTokens": "2.6",
+      "priceUsdAtCheck": "760.71",
+      "capUsdAtCheck": "1981"
+    },
+    {
+      "symbol": "QQQ",
+      "address": "0xD5f3879160bc7c32ebb4dC785F8a4F505888de68",
+      "maxDepositTokens": "2.8",
+      "priceUsdAtCheck": "705.39",
+      "capUsdAtCheck": "1976"
+    }
+  ]
+}
