@@ -4,22 +4,22 @@
 //
 // Environment (set in the Vercel project settings, never in the repo):
 //   RELAYER_KEY    private key of the relayer wallet (pays gas, receives fees)
-//   RPC_URL        e.g. https://rpc.testnet.chain.robinhood.com
-//   CHAIN_ID       e.g. 46630
+//   RPC_URL, CHAIN_ID optional: a private RPC, used only when CHAIN_ID matches the deployment;
+//                  otherwise the deployment file's public rpcUrl is used
 //   POOL           optional, ignored: the pool comes from deployments/<DEPLOYMENT_NAME>.json,
 //                  the same file the web app is built from, so the two always agree
-//   DEPLOYMENT_NAME optional, default "robinhoodTestnet"
+//   DEPLOYMENT_NAME optional, default "robinhood" (mainnet) once it exists, else "robinhoodTestnet"
 //   RELAYER_FEES   optional "0xToken:0.1,0xOther:0.2": minimum fee per asset, whole tokens.
 //                  Defaults come from the deployment file's "relayerFees"; this overrides per asset.
 const { ethers } = require("ethers");
 const { Relayer, RelayError } = require("./relayer");
 
 const MAX_BODY = 16 * 1024;
-const DEPLOYMENTS = { robinhoodTestnet: require("../deployments/robinhoodTestnet.json") };
+const { activeDeployment, rpcFor } = require("../deployments");
 
 /** The pool this deployment serves (from the deployment file, not an env var). */
 function deployedPool(env = process.env) {
-  const dep = DEPLOYMENTS[(env.DEPLOYMENT_NAME || "robinhoodTestnet").trim()];
+  const dep = activeDeployment(env);
   if (!dep) throw new RelayError("relayer misconfigured: DEPLOYMENT_NAME is unknown", 503);
   return dep;
 }
@@ -33,19 +33,19 @@ const clean = (v) => String(v).trim().replace(/^["']+|["']+$/g, "").trim();
 // contents), so a misconfiguration shows up as a clear message instead of "internal error".
 function relayerFromEnv(env = process.env) {
   if (cached) return cached;
-  const names = ["RELAYER_KEY", "RPC_URL", "CHAIN_ID"];
-  const v = Object.fromEntries([...names, "RELAYER_FEES"].map((k) => [k, env[k] === undefined ? "" : clean(env[k])]));
+  const names = ["RELAYER_KEY"];
+  const v = Object.fromEntries([...names, "RPC_URL", "CHAIN_ID", "RELAYER_FEES"].map((k) => [k, env[k] === undefined ? "" : clean(env[k])]));
   const missing = names.filter((k) => !v[k]);
   if (missing.length) throw new RelayError(`relayer not configured (missing ${missing.join(", ")})`, 503);
   const bad = (name, why) => new RelayError(`relayer misconfigured: ${name} ${why}`, 503);
 
   const key = /^[0-9a-fA-F]{64}$/.test(v.RELAYER_KEY) ? "0x" + v.RELAYER_KEY : v.RELAYER_KEY;
   if (!/^0x[0-9a-fA-F]{64}$/.test(key)) throw bad("RELAYER_KEY", "must be 0x followed by 64 hex characters");
-  if (!/^https?:\/\//.test(v.RPC_URL)) throw bad("RPC_URL", "must start with https://");
-  const chainId = Number(v.CHAIN_ID);
-  if (!Number.isInteger(chainId) || chainId <= 0) throw bad("CHAIN_ID", "must be a number like 46630");
+  if (v.CHAIN_ID && !(Number.isInteger(Number(v.CHAIN_ID)) && Number(v.CHAIN_ID) > 0)) throw bad("CHAIN_ID", "must be a number like 4663");
   const dep = deployedPool(env);
-  if (dep.chainId !== chainId) throw bad("CHAIN_ID", `doesn't match the deployment (${dep.chainId})`);
+  const chainId = dep.chainId;
+  const rpcUrl = rpcFor(dep, v);
+  if (!/^https?:\/\//.test(rpcUrl || "")) throw bad("RPC_URL", "must start with https://");
   // "0xToken:0.1,0xOther:0.2". Also accepts a decimal comma ("0,1"), any separator
   // between address and fee (":", space, "=", a look-alike colon) and ";" between entries.
   const minFees = {};
@@ -63,7 +63,7 @@ function relayerFromEnv(env = process.env) {
   }
   if (!Object.keys(minFees).length) throw bad("RELAYER_FEES", "needs at least one 0xTokenAddress:fee");
 
-  const provider = new ethers.JsonRpcProvider(v.RPC_URL, chainId, { staticNetwork: true });
+  const provider = new ethers.JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
   cached = new Relayer({ signer: new ethers.Wallet(key, provider), pool: ethers.getAddress(dep.pool), minFees, sponsorExits: !!dep.sponsorExits });
   return cached;
 }

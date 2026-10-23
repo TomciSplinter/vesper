@@ -1,5 +1,5 @@
 // Builds the static web app into webapp/dist (host it on any static host).
-//   node webapp/build.mjs [path/to/config.json]     default: webapp/config/robinhoodTestnet.json
+//   node webapp/build.mjs [path/to/config.json]     default: webapp/config/robinhood.json (mainnet) if present, else robinhoodTestnet.json
 // Needs `npm run build:circuit` first (copies the circuit's wasm + proving key).
 import * as esbuild from "esbuild";
 import fs from "node:fs";
@@ -10,7 +10,8 @@ import crypto from "node:crypto";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..");
 const dist = path.join(here, "dist");
-const configPath = path.resolve(process.argv[2] || path.join(here, "config", "robinhoodTestnet.json"));
+const defaultConfig = fs.existsSync(path.join(here, "config", "robinhood.json")) ? "robinhood.json" : "robinhoodTestnet.json";
+const configPath = path.resolve(process.argv[2] || path.join(here, "config", defaultConfig));
 
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(path.join(dist, "circuit"), { recursive: true });

@@ -517,7 +517,16 @@ function App() {
       )}
 
       <Progress state={progress} vesper={vesper} onClose={() => setProgress(null)} />
-      <footer className="muted small">v0.1 · testnet only until the ceremony and audit are done</footer>
+      <footer className="muted small">
+        {vesper.config.testnet ? "v0.1 · testnet" : "v0.1 · self-audited, not externally audited · "}
+        {!vesper.config.testnet && (
+          <a href="https://github.com/TomciSplinter/vesper/tree/main/audit" target="_blank" rel="noreferrer">audit</a>
+        )}
+        {!vesper.config.testnet && " · "}
+        {!vesper.config.testnet && (
+          <a href="https://github.com/TomciSplinter/vesper-ceremony" target="_blank" rel="noreferrer">ceremony</a>
+        )}
+      </footer>
     </div>
   );
 }

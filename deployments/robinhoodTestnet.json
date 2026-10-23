@@ -20,5 +20,6 @@
     "0x436cf7a631A32B49a8a2edff4500a47D214D9033",
     "0x0c350E68C861b01E4Ac7bbf895C3e0f0e8b7f424"
   ],
-  "ceremony": "https://github.com/TomciSplinter/vesper-ceremony (final key, drand quicknet round 33325012)"
+  "ceremony": "https://github.com/TomciSplinter/vesper-ceremony (final key, drand quicknet round 33325012)",
+  "rpcUrl": "https://rpc.testnet.chain.robinhood.com"
 }

@@ -5,7 +5,7 @@
 const { ethers } = require("ethers");
 const { initPoseidon } = require("../src/poseidon");
 const { publishAssociationSet } = require("../relayer/aspUpdate");
-const deployments = { robinhoodTestnet: require("../deployments/robinhoodTestnet.json") };
+const { activeDeployment, rpcFor } = require("../deployments");
 
 let running = null;
 
@@ -16,10 +16,10 @@ module.exports = async (req, res) => {
   if (req.method === "OPTIONS") return res.end("{}");
   try {
     const key = (process.env.ASP_KEY || process.env.RELAYER_KEY || "").trim().replace(/^["']|["']$/g, "");
-    const dep = deployments[process.env.DEPLOYMENT_NAME || "robinhoodTestnet"];
-    if (!key || !process.env.RPC_URL) throw new Error("approvals not configured");
+    const dep = activeDeployment();
+    if (!key || !dep) throw new Error("approvals not configured");
     await initPoseidon();
-    const provider = new ethers.JsonRpcProvider(process.env.RPC_URL.trim(), dep.chainId, { staticNetwork: true });
+    const provider = new ethers.JsonRpcProvider(rpcFor(dep), dep.chainId, { staticNetwork: true });
     const pool = new ethers.Contract(
       dep.pool,
       [

@@ -53,13 +53,20 @@ async function main() {
   // Initial assets and the approval publisher go in the constructor: later changes
   // that loosen rules have to wait the pool's 3-day ADMIN_DELAY.
   const postman = process.env.ASP_POSTMAN || deployer.address;
+  // OWNER: the admin (owner + guardian). On mainnet it must be a contract (a Safe), so a
+  // single key never controls the pool.
+  const owner = process.env.OWNER || deployer.address;
+  if (onMainnet) {
+    if (!process.env.OWNER) throw new Error("Set OWNER to the Safe address for mainnet.");
+    if ((await ethers.provider.getCode(owner)) === "0x") throw new Error(`OWNER ${owner} is not a contract (expected a Safe).`);
+  }
   const assetAddrs = assets.map((a) => a.split(":")[0]);
   const caps = assets.map((a) => ethers.parseEther(a.split(":")[1]));
   const pool = await ethers.deployContract("VesperPool", [
     await verifier.getAddress(),
     await hasher.getAddress(),
     MERKLE_TREE_HEIGHT,
-    deployer.address,
+    owner,
     postman,
     assetAddrs,
     caps,
@@ -71,7 +78,10 @@ async function main() {
   const deployment = {
     network: network.name,
     chainId: Number((await ethers.provider.getNetwork()).chainId),
+    rpcUrl: network.config.url,
     deployer: deployer.address,
+    owner,
+    aspPostman: postman,
     deployBlock: await ethers.provider.getBlockNumber(),
     hasher: await hasher.getAddress(),
     verifier: await verifier.getAddress(),
