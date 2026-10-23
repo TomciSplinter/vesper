@@ -4,8 +4,8 @@
   "chainName": "Robinhood Chain Testnet",
   "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
   "explorer": "https://explorer.testnet.chain.robinhood.com",
-  "pool": "0x436cf7a631A32B49a8a2edff4500a47D214D9033",
-  "deployBlock": 140336934,
+  "pool": "0x35AA1f9D4CbD2882288F5F39892fD4cE1f9AFd22",
+  "deployBlock": 141470125,
   "assets": [
     {
       "address": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",
@@ -26,6 +26,6 @@
     "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E": "0.05",
     "0xF9A6426Bd3A2B116f73F151b38a5cF2Fb09bF112": "0.5"
   },
-  "wasmUrl": "circuit/transaction2-38b593580b26.wasm",
-  "zkeyUrl": "circuit/transaction2-38b593580b26.zkey"
+  "wasmUrl": "circuit/transaction2-406e8734918d.wasm",
+  "zkeyUrl": "circuit/transaction2-406e8734918d.zkey"
 }

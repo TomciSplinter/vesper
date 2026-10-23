@@ -2,7 +2,7 @@
 
 A shielded pool for tokenized stocks on Robinhood Chain. Deposit Stock Tokens, hold and send them privately inside the pool, and withdraw with a zero-knowledge proof. A view key lets you show your holdings to an accountant or auditor without giving up the ability to spend.
 
-> **Status: v0.1, self-audited (findings and fixes in [`audit/`](audit/README.md)), not externally audited.** The proving key built by `npm run build:circuit` is a single-machine DEV key. Anyone who knows its randomness can forge proofs. Testnet only until the ceremony and audit are done.
+> **Status: v0.1, self-audited (findings and fixes in [`audit/`](audit/README.md)), not externally audited.** The proving key comes from a public multi-party ceremony ([vesper-ceremony](https://github.com/TomciSplinter/vesper-ceremony), recorded in `ceremony/final.json`); `npm run build:circuit` keeps it. Not externally audited yet.
 
 ## How it works
 

@@ -4,8 +4,8 @@
   "chainName": "Robinhood Chain Testnet",
   "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
   "explorer": "https://explorer.testnet.chain.robinhood.com",
-  "pool": "0x436cf7a631A32B49a8a2edff4500a47D214D9033",
-  "deployBlock": 140336934,
+  "pool": "0x35AA1f9D4CbD2882288F5F39892fD4cE1f9AFd22",
+  "deployBlock": 141470125,
   "assets": [
     {
       "address": "0xC9f9c86933092BbbfFF3CCb4b105A4A94bf3Bd4E",

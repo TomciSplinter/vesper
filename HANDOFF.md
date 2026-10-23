@@ -111,3 +111,9 @@ The founder is non-technical-leaning and on mobile: explain plainly, keep replie
 - Each contribution PR is checked by the *Verify ceremony* Action: only the next `NNNN.zkey` + attestation, valid against r1cs + phase 1, and it must contain every earlier contribution.
 - Finish: announce a future drand round as the beacon, `npm run finalize -- <hex> "<source>"`, then here `node scripts/import-ceremony.js ../vesper-ceremony`, compile, test, rebuild the web app, deploy.
 - Dry run (dev phase 1, 3 contributors + beacon) passed end to end, including the full test suite on the resulting key.
+
+## Ceremony finished, testnet on the final key
+
+- Phase 2 contributions: Tom, sod, Splinter; sealed with drand quicknet round 33325012 (announced in advance in `final/BEACON.md`), by the *Finalize ceremony* Action. Final zkey sha256 `d5e5d4c3…4923`, Verifier.sol sha256 `55f70ba9…ae94` (recorded in `ceremony/final.json`; mainnet deploy checks them).
+- The sandbox can't download the phase-1 file, so `import-ceremony.js` ran with `SKIP_VERIFY=1`; the Finalize Action ran `verify-final` publicly.
+- 66/66 tests pass on the final key. New testnet pool `0x35AA1f9D4CbD2882288F5F39892fD4cE1f9AFd22` (verifier `0x1EdE5788b5093138Ac4692bE2330adF057086A10`, hasher `0x9d723D94763864E2b06fc1de17474380E161F733`, deploy block 141470125), same TSLA + vTSLA, postman = relayer wallet. Live smoke test (deposit, private transfer, withdraw) PASSED. Previous pool `0x436c…9033` is in `previousPools`.
