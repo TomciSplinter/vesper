@@ -125,5 +125,5 @@ The founder is non-technical-leaning and on mobile: explain plainly, keep replie
 - 13 assets (TSLA NVDA AAPL MSFT AMZN GOOGL META COIN AMD INTC MU SPY QQQ), addresses checked against api.robinhood.com/rhj/assets and on-chain; caps ~ $2k per deposit and relayer fees ~ $1 (deployments/robinhood.assets.json). Admin changes go through the 3-day delay, executed from the Safe.
 - Fork rehearsal (`scripts/dev/fork-check.js`) passed with real TSLA before the deploy.
 - The relayer and /api/asp-update pick `deployments/robinhood.json` automatically; env RPC_URL/CHAIN_ID are only used if CHAIN_ID matches. The web app builds from `webapp/config/robinhood.json` (`node scripts/mainnet-config.js` regenerates it).
-- Source not yet verified on robinhoodchain.blockscout.com (explorer not reachable from the sandbox).
+- Source verified on Sourcify (exact match) for the verifier and pool via the *Verify mainnet source* Action (`scripts/sourcify-verify.js`); Blockscout picks Sourcify sources up. The Blockscout API itself sits behind a Cloudflare challenge, so direct Blockscout verification fails from scripts.
 - First live use (2026-10-24): founder deposited 0.07 TSLA (tx 0xa8ce6535…), screener approved it automatically, relayed withdrawal of 0.06 TSLA to a fresh address with the 0.0027 TSLA fee to the relayer. Fixed: amounts typed with a decimal comma ("0,07").
