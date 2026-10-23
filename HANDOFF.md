@@ -126,3 +126,4 @@ The founder is non-technical-leaning and on mobile: explain plainly, keep replie
 - Fork rehearsal (`scripts/dev/fork-check.js`) passed with real TSLA before the deploy.
 - The relayer and /api/asp-update pick `deployments/robinhood.json` automatically; env RPC_URL/CHAIN_ID are only used if CHAIN_ID matches. The web app builds from `webapp/config/robinhood.json` (`node scripts/mainnet-config.js` regenerates it).
 - Source not yet verified on robinhoodchain.blockscout.com (explorer not reachable from the sandbox).
+- First live use (2026-10-24): founder deposited 0.07 TSLA (tx 0xa8ce6535…), screener approved it automatically, relayed withdrawal of 0.06 TSLA to a fresh address with the 0.0027 TSLA fee to the relayer. Fixed: amounts typed with a decimal comma ("0,07").
