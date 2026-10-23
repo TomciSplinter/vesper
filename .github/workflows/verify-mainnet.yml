@@ -26,4 +26,4 @@ jobs:
           note "verifier exit $a" v.log
           npx hardhat verify --network robinhood --constructor-args scripts/verify-args.js $(node -p 'require("./deployments/robinhood.json").pool') > p.log 2>&1; b=$?
           note "pool exit $b" p.log
-          exit $b
+          node scripts/sourcify-verify.js
