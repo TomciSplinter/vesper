@@ -1,25 +1,99 @@
 {
-  "testnet": true,
-  "chainId": 31337,
-  "chainName": "Local test chain",
-  "rpcUrl": "http://127.0.0.1:8545",
-  "explorer": "",
-  "pool": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-  "deployBlock": 5,
+  "testnet": false,
+  "chainId": 4663,
+  "chainName": "Robinhood Chain",
+  "rpcUrl": "https://rpc.mainnet.chain.robinhood.com",
+  "explorer": "https://robinhoodchain.blockscout.com",
+  "pool": "0x0f52ed18CBCE672dcBb51dD2554Cc469054EE026",
+  "deployBlock": 96303874,
   "assets": [
     {
-      "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-      "symbol": "vTSLA",
-      "name": "vTSLA test token"
+      "address": "0x322F0929c4625eD5bAd873c95208D54E1c003b2d",
+      "symbol": "TSLA",
+      "name": "Tesla (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC",
+      "symbol": "NVDA",
+      "name": "NVIDIA (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9",
+      "symbol": "AAPL",
+      "name": "Apple (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xe93237C50D904957Cf27E7B1133b510C669c2e74",
+      "symbol": "MSFT",
+      "name": "Microsoft (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x12f190a9F9d7D37a250758b26824B97CE941bF54",
+      "symbol": "AMZN",
+      "name": "Amazon (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3",
+      "symbol": "GOOGL",
+      "name": "Alphabet Class A (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35",
+      "symbol": "META",
+      "name": "Meta Platforms (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x6330D8C3178a418788dF01a47479c0ce7CCF450b",
+      "symbol": "COIN",
+      "name": "Coinbase (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC",
+      "symbol": "AMD",
+      "name": "AMD (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xc72b96e0E48ecd4DC75E1e45396e26300BC39681",
+      "symbol": "INTC",
+      "name": "Intel (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+      "symbol": "MU",
+      "name": "Micron Technology (Robinhood Stock Token)"
+    },
+    {
+      "address": "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C",
+      "symbol": "SPY",
+      "name": "SPDR S&P 500 ETF Trust (Robinhood Stock Token)"
+    },
+    {
+      "address": "0xD5f3879160bc7c32ebb4dC785F8a4F505888de68",
+      "symbol": "QQQ",
+      "name": "Invesco QQQ (Robinhood Stock Token)"
     }
   ],
   "relayers": [
-    "http://127.0.0.1:8788"
+    "/api"
   ],
+  "aspUpdateUrl": "/api/asp-update",
   "maxRelayerFees": {
-    "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0": "1"
+    "0x322F0929c4625eD5bAd873c95208D54E1c003b2d": "0.013",
+    "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC": "0.024",
+    "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9": "0.014",
+    "0xe93237C50D904957Cf27E7B1133b510C669c2e74": "0.0095",
+    "0x12f190a9F9d7D37a250758b26824B97CE941bF54": "0.02",
+    "0x2e0847E8910a9732eB3fb1bb4b70a580ADAD4FE3": "0.016",
+    "0xc0D6457C16Cc70d6790Dd43521C899C87ce02f35": "0.0077",
+    "0x6330D8C3178a418788dF01a47479c0ce7CCF450b": "0.03",
+    "0x86923f96303D656E4aa86D9d42D1e57ad2023fdC": "0.0096",
+    "0xc72b96e0E48ecd4DC75E1e45396e26300BC39681": "0.057",
+    "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD": "0.0057",
+    "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C": "0.0066",
+    "0xD5f3879160bc7c32ebb4dC785F8a4F505888de68": "0.0071"
   },
-  "aspUpdateUrl": "http://127.0.0.1:8789/asp-update",
+  "pricesUrl": "/api/prices",
+  "walletConnectProjectId": "3ee29bacb0c46178df71a6449cfee53b",
   "wasmUrl": "circuit/transaction2-406e8734918d.wasm",
   "zkeyUrl": "circuit/transaction2-406e8734918d.zkey"
 }
