@@ -2554,3 +2554,43 @@ h3 {
     transform: translateY(-21%);
   }
 }
+
+.menu-contact {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 20px;
+  margin: 26px 0 0;
+  font-size: 14px;
+  color: var(--dim);
+}
+.closing-contact {
+  margin: 28px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.closing-contact a,
+.menu-contact a {
+  color: var(--dim);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+.closing-contact a:hover,
+.menu-contact a:hover {
+  color: var(--text);
+}
+.foot-cols a {
+  overflow-wrap: anywhere;
+}
+.foot-brand .foot-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+.foot-contact a {
+  color: var(--dim);
+}
+.foot-contact a:hover {
+  color: var(--text);
+}

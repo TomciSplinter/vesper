@@ -1435,6 +1435,10 @@ function App() {
             <a href="https://github.com/TomciSplinter/vesper" target="_blank" rel="noreferrer">
               Source code
             </a>
+            <a href="https://x.com/VesperRobinhood" target="_blank" rel="noreferrer">
+              X
+            </a>
+            <a href="mailto:contact@vesper.markets">Contact</a>
           </nav>
         </footer>
       </div>
