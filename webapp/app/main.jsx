@@ -1045,39 +1045,69 @@ function ClaimScreen({ vesper, secret, unlocked, onUnlock, run, onClose, chooseW
 
 function WalletSheet({ vesper, onPick, onClose }) {
   const [injected, setInjected] = useState(null);
-  const [waiting, setWaiting] = useState(null);
+  const [chosen, setChosen] = useState(null); // a WALLET_APPS entry, "other" or "qr"
   const [uri, setUri] = useState(null);
   const [qr, setQr] = useState(null);
   const [err, setErr] = useState(null);
+  const pending = useRef(null);
   const mobile = isMobile();
   const wc = !!vesper.config.walletConnectProjectId;
+  const waiting = chosen ? (typeof chosen === "object" ? chosen.name : chosen) : null;
+
+  // Start the WalletConnect pairing early, so tapping a wallet can open it straight away
+  // (phones only open another app from a tap, not after a delay).
+  const begin = () => {
+    if (pending.current) return;
+    setErr(null);
+    const slow = setTimeout(() => setErr("WalletConnect isn't answering. Check your connection and try again."), 20000);
+    pending.current = connectWalletConnect(vesper.config, (u) => {
+      clearTimeout(slow);
+      setErr(null);
+      setUri(u);
+    })
+      .then((provider) => {
+        clearTimeout(slow);
+        onPick(provider);
+      })
+      .catch((e) => {
+        clearTimeout(slow);
+        pending.current = null;
+        setUri(null);
+        setChosen(null);
+        setErr(friendly(e));
+      });
+  };
 
   useEffect(() => {
     discoverInjected().then(setInjected);
+    if (wc && mobile) begin();
   }, []);
 
-  const startWc = async (app) => {
-    setErr(null);
-    setUri(null);
+  useEffect(() => {
+    if (!uri || chosen !== "qr" && chosen !== "other") return;
+    import("qrcode")
+      .then((QR) => QR.toDataURL(uri, { margin: 1, width: 300, color: { dark: "#0e1119", light: "#e9ebf2" } }))
+      .then(setQr)
+      .catch(() => {});
+  }, [uri, chosen]);
+
+  const openApp = (app) => {
+    setChosen(app);
+    if (uri) window.location.href = app.link(uri);
+    else begin();
+  };
+  const pickInjected = (p) => {
+    if (pending.current) cancelWalletConnect();
+    pending.current = null;
+    onPick(p);
+  };
+  const reset = () => {
+    setChosen(null);
     setQr(null);
-    setWaiting(app ? app.name : "phone");
-    try {
-      const provider = await connectWalletConnect(vesper.config, async (u) => {
-        setUri(u);
-        if (mobile && app) window.location.href = app.link(u);
-        else {
-          const QR = await import("qrcode");
-          setQr(await QR.toDataURL(u, { margin: 1, width: 300, color: { dark: "#0e1119", light: "#e9ebf2" } }));
-        }
-      });
-      onPick(provider);
-    } catch (e) {
-      setWaiting(null);
-      setErr(friendly(e));
-    }
   };
   const close = () => {
-    if (waiting) cancelWalletConnect();
+    cancelWalletConnect();
+    pending.current = null;
     onClose();
   };
 
@@ -1099,24 +1129,31 @@ function WalletSheet({ vesper, onPick, onClose }) {
                 <p className="ws-note">Scan this with a wallet app on your phone, then approve the connection there.</p>
               </>
             ) : (
+              <div className="working" aria-hidden="true">
+                <Horizon />
+              </div>
+            )}
+            {typeof chosen === "object" && (
               <>
-                <div className="working" aria-hidden="true">
-                  <Horizon />
-                </div>
-                <p className="ws-note">
-                  {waiting === "phone" ? "Preparing the connection…" : `Approve the connection in ${waiting}, then come back to this tab.`}
-                </p>
+                <p className="ws-note">{uri ? `Approve the connection in ${chosen.name}, then come back to this tab.` : "Preparing the connection…"}</p>
+                {uri && (
+                  <a className="btn primary block" href={chosen.link(uri)} data-testid="open-wallet-app">
+                    Open {chosen.name}
+                  </a>
+                )}
               </>
             )}
-            {uri && mobile && (
+            {chosen === "other" && uri && (
               <div className="btn-row center">
                 <a className="btn ghost small" href={uri}>
-                  Open another wallet app
+                  Open wallet app
                 </a>
                 <Copy text={uri} label="Copy link" />
               </div>
             )}
-            <button className="btn-text" onClick={() => (cancelWalletConnect(), setWaiting(null), setQr(null), setUri(null))}>
+            {chosen === "qr" && !qr && <p className="ws-note">Preparing the QR code…</p>}
+            {err && <p className="error ws-note">{err}</p>}
+            <button className="btn-text" onClick={reset}>
               Choose a different wallet
             </button>
           </div>
@@ -1127,7 +1164,7 @@ function WalletSheet({ vesper, onPick, onClose }) {
               <div className="ws-group">
                 <p className="ws-label">In this browser</p>
                 {injected.map((w) => (
-                  <button key={w.id} className="ws-item" onClick={() => onPick(w.provider)} data-testid={`wallet-${w.id}`}>
+                  <button key={w.id} className="ws-item" onClick={() => pickInjected(w.provider)} data-testid={`wallet-${w.id}`}>
                     {w.icon ? <img src={w.icon} alt="" width="32" height="32" className="ws-icon" /> : <span className="ws-icon blank">{w.name[0]}</span>}
                     <span className="ws-name">{w.name}</span>
                     <Icon name="chevron" size={16} className="ws-go" />
@@ -1141,20 +1178,20 @@ function WalletSheet({ vesper, onPick, onClose }) {
                 {mobile ? (
                   <>
                     {WALLET_APPS.map((a) => (
-                      <button key={a.id} className="ws-item" onClick={() => startWc(a)} data-testid={`wallet-app-${a.id}`}>
+                      <button key={a.id} className="ws-item" onClick={() => openApp(a)} data-testid={`wallet-app-${a.id}`}>
                         <span className="ws-icon blank">{a.name[0]}</span>
                         <span className="ws-name">{a.name}</span>
                         <Icon name="chevron" size={16} className="ws-go" />
                       </button>
                     ))}
-                    <button className="ws-item" onClick={() => startWc(null)} data-testid="wallet-app-other">
+                    <button className="ws-item" onClick={() => (setChosen("other"), begin())} data-testid="wallet-app-other">
                       <span className="ws-icon blank">+</span>
                       <span className="ws-name">Another wallet app</span>
                       <Icon name="chevron" size={16} className="ws-go" />
                     </button>
                   </>
                 ) : (
-                  <button className="ws-item" onClick={() => startWc(null)} data-testid="wallet-app-qr">
+                  <button className="ws-item" onClick={() => (setChosen("qr"), begin())} data-testid="wallet-app-qr">
                     <span className="ws-icon blank">
                       <Icon name="scan" size={18} />
                     </span>
