@@ -20,6 +20,9 @@ await esbuild.build({
   entryPoints: { app: path.join(here, "app", "main.jsx") },
   bundle: true,
   format: "esm",
+  // WalletConnect and the QR code library load only when someone opens the wallet picker.
+  splitting: true,
+  chunkNames: "chunks/[name]-[hash]",
   platform: "browser",
   target: ["es2020"],
   minify: true,

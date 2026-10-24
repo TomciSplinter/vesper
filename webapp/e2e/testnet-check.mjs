@@ -147,6 +147,7 @@ async function main() {
 
   await page.goto(`http://127.0.0.1:${APP_PORT}/`);
   await page.click('[data-testid="unlock"]');
+  await page.click('[data-testid="wallet-injected"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="refresh"]')?.textContent === "Refresh");
   const start = await priv();
   check(true, `unlocked on Robinhood testnet; private balance ${ethers.formatEther(start)}`);

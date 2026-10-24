@@ -10,7 +10,7 @@ contracts/Verifier.sol
 
 # Web app build output and test leftovers
 # webapp/dist is committed so Vercel can serve it without building the circuit.
-webapp/dist/*.map
+webapp/dist/**/*.map
 webapp/e2e/*.config.json
 webapp/e2e/screenshots/
 deployments/localhost.json

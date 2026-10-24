@@ -218,6 +218,7 @@ async function main() {
   await desktop("desk-1-welcome.png");
 
   await page.click('[data-testid="unlock"]');
+  await page.click('[data-testid="wallet-injected"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="private-vTSLA"]')?.textContent === "0");
   check(true, "wallet connects and unlocks the Vesper account; private balance 0");
 
@@ -339,6 +340,7 @@ async function main() {
   await page.click('[data-testid="account-menu"]');
   await page.click('[data-testid="lock"]');
   await page.click('[data-testid="unlock"]');
+  await page.click('[data-testid="wallet-injected"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="refresh"]')?.textContent === "Refresh");
   await page.click('[data-testid="tab-link"]');
   await page.fill('[data-testid="link-amount"]', "2");

@@ -89,29 +89,31 @@ export class Vesper {
 
   // ------------------------------------------------------------ wallet
 
-  hasWallet() {
-    return typeof window !== "undefined" && !!window.ethereum;
-  }
-
-  async connect() {
-    if (!this.hasWallet()) throw new Error("No wallet found. Open this page in your wallet's browser (e.g. MetaMask) or install a wallet extension.");
-    const eth = window.ethereum;
+  /** Connects an EIP-1193 wallet (an extension, or a phone wallet through WalletConnect). */
+  async connect(eth) {
+    eth = eth || (typeof window !== "undefined" ? window.ethereum : null);
+    if (!eth) throw new Error("No wallet found. Pick a wallet app, or install a wallet extension in this browser.");
+    this.eth = eth;
     await eth.request({ method: "eth_requestAccounts" });
     const want = toBeHex(this.config.chainId);
-    try {
-      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: want }] });
-    } catch (err) {
-      if (err.code !== 4902 && err?.data?.originalError?.code !== 4902) throw err;
-      await eth.request({
-        method: "wallet_addEthereumChain",
-        params: [{
-          chainId: want,
-          chainName: this.config.chainName,
-          rpcUrls: [this.config.rpcUrl],
-          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-          blockExplorerUrls: this.config.explorer ? [this.config.explorer] : [],
-        }],
-      });
+    const current = await eth.request({ method: "eth_chainId" }).catch(() => null);
+    if (!current || BigInt(current) !== BigInt(this.config.chainId)) {
+      try {
+        await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: want }] });
+      } catch (err) {
+        const code = err?.code ?? err?.data?.originalError?.code;
+        if (code !== 4902 && !/unrecognized|not added|unsupported chain/i.test(err?.message || "")) throw err;
+        await eth.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: want,
+            chainName: this.config.chainName,
+            rpcUrls: [this.config.rpcUrl],
+            nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+            blockExplorerUrls: this.config.explorer ? [this.config.explorer] : [],
+          }],
+        });
+      }
     }
     const provider = new BrowserProvider(eth);
     this.signer = await provider.getSigner();
@@ -124,8 +126,8 @@ export class Vesper {
    * produced a DIFFERENT account here before, its wallet doesn't sign the same way
    * twice and funds could look lost: warn instead of silently switching accounts.
    */
-  async unlock() {
-    if (!this.signer) await this.connect();
+  async unlock(eth) {
+    if (eth || !this.signer) await this.connect(eth);
     const { domain, types, value } = signInTypedData(this.config.chainId);
     const sig = await this.signer.signTypedData(domain, types, value);
     this.keypair = Keypair.fromSignature(sig);
@@ -147,6 +149,8 @@ export class Vesper {
 
   lock() {
     this.keypair = null;
+    this.signer = null;
+    this.account = null;
   }
 
   get viewOnly() {

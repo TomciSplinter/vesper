@@ -157,6 +157,7 @@ async function main() {
       relayers: [`http://127.0.0.1:${RELAYER_PORT}`],
       aspUpdateUrl: `http://127.0.0.1:${ASP_PORT}/asp-update`,
       pricesUrl: `http://127.0.0.1:${PRICE_PORT}/prices`,
+      walletConnectProjectId: "preview-only-not-a-real-project-id",
       maxRelayerFees: Object.fromEntries(tokens.map((a, i) => [a, (5 / STOCKS[i][2]).toFixed(4)])),
     })
   );
@@ -166,7 +167,8 @@ async function main() {
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || "/opt/pw-browsers/chromium" });
   const wallet = new ethers.Wallet(KEYS[1], provider);
   const page = async (width, height, withWallet = true) => {
-    const p = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+    const mobileUA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+    const p = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2, ...(width < 600 ? { userAgent: mobileUA, isMobile: true, hasTouch: true } : {}) });
     p.setDefaultTimeout(120_000);
     p.on("pageerror", (err) => console.log("  [page error]", err.message));
     if (withWallet) {
@@ -212,6 +214,9 @@ async function main() {
       const p = await page(w, h);
       await p.goto(`http://127.0.0.1:${APP_PORT}/`);
       await p.click('[data-testid="unlock"]');
+      await p.waitForSelector('[data-testid="wallet-injected"]');
+      await snap(p, `${tag}-01b-wallets.png`, false);
+      await p.click('[data-testid="wallet-injected"]');
       await ready(p);
       await snap(p, `${tag}-02-dashboard.png`);
       for (const t of ["send", "link", "withdraw"]) {
