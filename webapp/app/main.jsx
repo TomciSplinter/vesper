@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import { formatUnits } from "ethers";
 import { Vesper, fmt, parseAmount } from "./vesper.js";
 import { toShares } from "../../src/index.js";
-import { discoverInjected, connectWalletConnect, cancelWalletConnect, WALLET_APPS, isMobile } from "./wallets.js";
+import { discoverInjected, connectWalletConnect, cancelWalletConnect, resetWalletConnectStorage, WALLET_APPS, isMobile } from "./wallets.js";
+import * as wallets from "./wallets.js";
 
 // ------------------------------------------------------------------ helpers
 
@@ -1056,25 +1057,40 @@ function WalletSheet({ vesper, onPick, onClose }) {
 
   // Start the WalletConnect pairing early, so tapping a wallet can open it straight away
   // (phones only open another app from a tap, not after a delay).
+  const attempt = useRef(0);
   const begin = () => {
     if (pending.current) return;
     setErr(null);
-    const slow = setTimeout(() => setErr("WalletConnect isn't answering. Check your connection and try again."), 20000);
-    pending.current = connectWalletConnect(vesper.config, (u) => {
+    const run = ++attempt.current;
+    let slow;
+    const stuck = new Promise((_, no) => {
+      slow = setTimeout(() => no(Object.assign(new Error("stuck"), { stuck: true })), 15000);
+    });
+    const go = connectWalletConnect(vesper.config, (u) => {
       clearTimeout(slow);
+      if (run !== attempt.current) return;
       setErr(null);
       setUri(u);
-    })
-      .then((provider) => {
+    });
+    pending.current = go;
+    // A hang before the pairing link appears: clear old saved sessions and try once more by itself.
+    Promise.race([go.then((p) => ({ p })), stuck.catch((e) => (wallets.wcStage === "waiting for wallet" ? new Promise(() => {}) : Promise.reject(e)))])
+      .then(({ p }) => {
         clearTimeout(slow);
-        onPick(provider);
+        if (run === attempt.current) onPick(p);
       })
-      .catch((e) => {
+      .catch(async (e) => {
         clearTimeout(slow);
+        if (run !== attempt.current) return;
         pending.current = null;
         setUri(null);
+        const stage = wallets.wcStage;
+        await cancelWalletConnect();
+        await resetWalletConnectStorage();
+        if (run === 1) return begin(); // first failure: retry once with a clean slate
         setChosen(null);
-        setErr(friendly(e));
+        const why = e.stuck ? `WalletConnect didn't answer (stopped at: ${stage}).` : friendly(e);
+        setErr(`${why} Try again, or try a different network (Wi-Fi vs mobile data).`);
       });
   };
 

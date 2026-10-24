@@ -32,6 +32,24 @@ export const WALLET_APPS = [
 ];
 
 let wcProvider = null;
+export let wcStage = "idle"; // where a stuck connection got to, shown if it fails
+
+/** Wipes WalletConnect's saved sessions in this browser (old, broken ones can make it hang). */
+export async function resetWalletConnectStorage() {
+  wcProvider = null;
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith("wc@") || k.startsWith("WALLETCONNECT") || k.startsWith("W3M")) localStorage.removeItem(k);
+  } catch {}
+  try {
+    const dbs = indexedDB.databases ? await indexedDB.databases() : [{ name: "WALLET_CONNECT_V2_INDEXED_DB" }];
+    await Promise.all(
+      dbs.filter((d) => /WALLET_CONNECT|walletconnect/i.test(d.name || "")).map((d) => new Promise((r) => {
+        const q = indexedDB.deleteDatabase(d.name);
+        q.onsuccess = q.onerror = q.onblocked = () => r();
+      })),
+    );
+  } catch {}
+}
 
 /**
  * Starts a WalletConnect session. onUri(uri) is called with the pairing link (show it as a
@@ -39,7 +57,9 @@ let wcProvider = null;
  */
 export async function connectWalletConnect(config, onUri) {
   if (!config.walletConnectProjectId) throw new Error("Wallet apps aren't set up on this site yet.");
+  wcStage = "loading";
   const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
+  wcStage = "starting";
   if (wcProvider) {
     try {
       await wcProvider.disconnect();
@@ -58,7 +78,11 @@ export async function connectWalletConnect(config, onUri) {
       icons: [`${origin}/icon.png`],
     },
   });
-  wcProvider.on("display_uri", onUri);
+  wcStage = "pairing";
+  wcProvider.on("display_uri", (u) => {
+    wcStage = "waiting for wallet";
+    onUri(u);
+  });
   await wcProvider.connect({ optionalChains: [config.chainId], rpcMap: { [config.chainId]: config.rpcUrl } });
   return wcProvider;
 }
