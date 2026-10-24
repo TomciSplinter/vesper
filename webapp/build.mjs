@@ -54,6 +54,7 @@ const fontFiles = {
 };
 for (const [name, src] of Object.entries(fontFiles)) fs.copyFileSync(path.join(root, "node_modules", src), path.join(dist, "fonts", name));
 fs.copyFileSync(path.join(here, "index.html"), path.join(dist, "index.html"));
+fs.copyFileSync(path.join(here, "app", "icon.png"), path.join(dist, "icon.png"));
 
 // Circuit files are named after a hash of their contents, so a browser can never use a
 // cached copy from an older circuit with a newer app (config.json, never cached, points

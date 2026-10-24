@@ -92,5 +92,6 @@
     "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C": "0.0066",
     "0xD5f3879160bc7c32ebb4dC785F8a4F505888de68": "0.0071"
   },
-  "pricesUrl": "/api/prices"
+  "pricesUrl": "/api/prices",
+  "walletConnectProjectId": "3ee29bacb0c46178df71a6449cfee53b"
 }

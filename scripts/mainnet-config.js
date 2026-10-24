@@ -27,6 +27,7 @@ const config = {
   relayers: ["/api"],
   aspUpdateUrl: "/api/asp-update",
   pricesUrl: "/api/prices",
+  walletConnectProjectId: "3ee29bacb0c46178df71a6449cfee53b",
   maxRelayerFees: Object.fromEntries(assets.map((a) => [a.address, a.maxRelayerFeeTokens])),
 };
 fs.writeFileSync(path.join(root, "webapp", "config", "robinhood.json"), JSON.stringify(config, null, 2) + "\n");
