@@ -1,0 +1,18 @@
+name: Check live site
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
+      - run: |
+          set -o pipefail
+          node scripts/dev/site-check.mjs 2>&1 | tee log.txt || true
+          while IFS= read -r line; do echo "::notice::$line"; done < log.txt
+          node scripts/dev/wc-debug.mjs > wc.txt 2>&1 || true
+          grep -v "ws recv" wc.txt | head -20 | while IFS= read -r line; do echo "::notice::wc $line"; done
+          grep -q "^FAIL" log.txt && exit 1 || exit 0

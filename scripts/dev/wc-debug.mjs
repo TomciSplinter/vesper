@@ -1,7 +1,7 @@
 // Opens the live site like a phone, taps Connect wallet -> MetaMask, and reports what
 // WalletConnect does (console, failed requests, websockets). Run in CI where the internet is open.
 import { chromium } from "playwright";
-const url = process.argv[2] || "https://www.vesper.markets/";
+const url = process.argv[2] || "https://www.vesper.markets/app/";
 const out = [];
 const log = (m) => { out.push(m); console.log(m); };
 const b = await chromium.launch();

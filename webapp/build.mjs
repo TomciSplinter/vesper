@@ -1,4 +1,5 @@
-// Builds the static web app into webapp/dist (host it on any static host).
+// Builds the static site into webapp/dist (host it on any static host): the landing page at /
+// (webapp/site) and the app at /app/ (webapp/app). Both share fonts, icon and config.json.
 //   node webapp/build.mjs [path/to/config.json]     default: webapp/config/robinhood.json (mainnet) if present, else robinhoodTestnet.json
 // Needs `npm run build:circuit` first (copies the circuit's wasm + proving key).
 import * as esbuild from "esbuild";
@@ -53,8 +54,24 @@ const fontFiles = {
   "newsreader.woff2": "@fontsource-variable/newsreader/files/newsreader-latin-opsz-normal.woff2",
 };
 for (const [name, src] of Object.entries(fontFiles)) fs.copyFileSync(path.join(root, "node_modules", src), path.join(dist, "fonts", name));
-fs.copyFileSync(path.join(here, "index.html"), path.join(dist, "index.html"));
+// The app lives at /app/; its page uses <base href="/"> so it shares the files at the root.
+fs.mkdirSync(path.join(dist, "app"), { recursive: true });
+fs.copyFileSync(path.join(here, "index.html"), path.join(dist, "app", "index.html"));
 fs.copyFileSync(path.join(here, "app", "icon.png"), path.join(dist, "icon.png"));
+
+// The landing page: plain HTML, CSS and a little JS, so it shows up instantly.
+const site = path.join(here, "site");
+fs.copyFileSync(path.join(site, "index.html"), path.join(dist, "index.html"));
+for (const f of ["og.png"]) if (fs.existsSync(path.join(site, f))) fs.copyFileSync(path.join(site, f), path.join(dist, f));
+await esbuild.build({
+  entryPoints: [path.join(site, "site.js"), path.join(site, "site.css")],
+  bundle: false,
+  minify: true,
+  format: "esm",
+  target: ["es2020", "safari15"],
+  outdir: dist,
+  logLevel: "warning",
+});
 
 // Circuit files are named after a hash of their contents, so a browser can never use a
 // cached copy from an older circuit with a newer app (config.json, never cached, points

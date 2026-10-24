@@ -53,9 +53,9 @@ const pass = http.createServer((req, res) => {
 });
 
 function serveStatic(dir, port) {
-  const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm" };
+  const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm", ".woff2": "font/woff2", ".png": "image/png" };
   const s = http.createServer((req, res) => {
-    const p = path.join(dir, decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/^\/$/, "/index.html"));
+    const p = path.join(dir, decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/\/$/, "/index.html").replace(/^\/app$/, "/app/index.html"));
     if (!p.startsWith(dir) || !fs.existsSync(p)) return res.writeHead(404).end();
     res.writeHead(200, { "content-type": types[path.extname(p)] || "application/octet-stream" });
     fs.createReadStream(p).pipe(res);
@@ -145,7 +145,7 @@ async function main() {
   };
   const priv = async () => ethers.parseEther((await page.textContent('[data-testid="private-vTSLA"]')).trim());
 
-  await page.goto(`http://127.0.0.1:${APP_PORT}/`);
+  await page.goto(`http://127.0.0.1:${APP_PORT}/app/`);
   await page.click('[data-testid="unlock"]');
   await page.click('[data-testid="wallet-injected"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="refresh"]')?.textContent === "Refresh");

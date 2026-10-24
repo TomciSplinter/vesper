@@ -136,3 +136,11 @@ The founder is non-technical-leaning and on mobile: explain plainly, keep replie
 - The horizon is the organizing idea: the portfolio card shows your public wallet above the line and your private balance below it; every action shows "On the explorer" rows saying what becomes visible.
 - Tabs: Add, Send, Link, Withdraw. Receive address and view key live in their own panel; Lock is in the account menu. USD values come from `/api/prices` (Robinhood's public prices x share multiplier, cached a minute).
 - `node webapp/e2e/preview.mjs` builds a local chain with several stocks, notes and a link, then screenshots every screen (phone + desktop) into `webapp/e2e/screenshots/preview/`. `--stop` stops its chain. The browser e2e (`run.mjs`) passes all 31 checks on the new interface.
+
+## Landing page, app moved to /app/ (2026-10-24)
+
+- vesper.markets is now a landing page (`webapp/site/`: plain HTML, CSS and a small JS file, no framework, no third-party requests). The app moved to **vesper.markets/app/**. `webapp/build.mjs` builds both into `webapp/dist`: the landing at the root, the app page at `dist/app/index.html` with `<base href="/">`, so app.js, fonts, config.json and the circuit stay at the root. `vercel.json` rewrites `/app` to the app page.
+- Claim links now point at `/app/#claim=…`. Old links (`vesper.markets/#claim=…`) still work: an inline script on the landing page forwards them to `/app/`.
+- Sections: hero (planet setting below the horizon), "a public wallet is a statement anyone can read" with cards sinking through the horizon (public above, sealed below), "Try it" cards (Add, Send, Withdraw) with a What you see / What the chain sees switch, the gift-link story animation (create, send in a chat, Ada claims, done, with the explorer feed above the horizon), use cases, wallet vs broker vs Vesper, safety, the 13 stocks with live prices from `/api/prices`, FAQ, footer. Everything on it matches what the contracts and the app actually do (deposits public, asset visible on private transfers, withdrawals show address and amount).
+- `node scripts/dev/og-image.mjs` re-renders `webapp/site/og.png`, the 1200x630 picture chat apps show for a vesper.markets link.
+- Careful: `webapp/e2e/run.mjs` rebuilds `webapp/dist` with a localhost config. Run `node webapp/build.mjs` again before committing, or the live site gets the test config.

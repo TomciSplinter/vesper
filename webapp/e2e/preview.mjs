@@ -105,7 +105,7 @@ function serve(port, handler) {
 function serveStatic(dir) {
   const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm", ".woff2": "font/woff2", ".map": "application/json" };
   return serve(APP_PORT, (req, res) => {
-    const p = path.join(dir, decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/^\/$/, "/index.html"));
+    const p = path.join(dir, decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/\/$/, "/index.html").replace(/^\/app$/, "/app/index.html"));
     if (!p.startsWith(dir) || !fs.existsSync(p)) return res.writeHead(404).end();
     res.writeHead(200, { "content-type": types[path.extname(p)] || "application/octet-stream" });
     fs.createReadStream(p).pipe(res);
@@ -204,7 +204,7 @@ async function main() {
   ]) {
     if (want("welcome")) {
       const p = await page(w, h);
-      await p.goto(`http://127.0.0.1:${APP_PORT}/`);
+      await p.goto(`http://127.0.0.1:${APP_PORT}/app/`);
       await p.waitForSelector('[data-testid="unlock"]');
       await p.waitForTimeout(1900);
       await snap(p, `${tag}-01-welcome.png`);
@@ -212,7 +212,7 @@ async function main() {
     }
     if (want("dash")) {
       const p = await page(w, h);
-      await p.goto(`http://127.0.0.1:${APP_PORT}/`);
+      await p.goto(`http://127.0.0.1:${APP_PORT}/app/`);
       await p.click('[data-testid="unlock"]');
       await p.waitForSelector('[data-testid="wallet-injected"]');
       await snap(p, `${tag}-01b-wallets.png`, false);
@@ -243,7 +243,7 @@ async function main() {
     }
     if (want("claim")) {
       const p = await page(w, h, false);
-      await p.goto(`http://127.0.0.1:${APP_PORT}/#claim=${link}`);
+      await p.goto(`http://127.0.0.1:${APP_PORT}/app/#claim=${link}`);
       await p.waitForSelector('[data-testid="claim-amount"], [data-testid="claim-empty"]');
       await snap(p, `${tag}-07-claim.png`);
       await p.close();

@@ -64,9 +64,9 @@ async function waitForRpc() {
 }
 
 function serveStatic(dir, port) {
-  const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm", ".map": "application/json" };
+  const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm", ".map": "application/json", ".woff2": "font/woff2", ".png": "image/png" };
   const server = http.createServer((req, res) => {
-    const p = path.join(dir, decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/^\/$/, "/index.html"));
+    const p = path.join(dir, decodeURIComponent(new URL(req.url, "http://x").pathname).replace(/\/$/, "/index.html").replace(/^\/app$/, "/app/index.html"));
     if (!p.startsWith(dir) || !fs.existsSync(p)) return res.writeHead(404).end();
     res.writeHead(200, { "content-type": types[path.extname(p)] || "application/octet-stream" });
     fs.createReadStream(p).pipe(res);
@@ -205,7 +205,7 @@ async function main() {
   const privateBalance = async () => ethers.parseEther((await page.textContent('[data-testid="private-vTSLA"]')).trim());
 
   console.log("Driving the app…");
-  await page.goto(`http://127.0.0.1:${APP_PORT}/`);
+  await page.goto(`http://127.0.0.1:${APP_PORT}/app/`);
   await page.waitForSelector('[data-testid="unlock"]');
   await page.screenshot({ path: path.join(shots, "1-welcome.png") });
   const desktop = async (name) => {

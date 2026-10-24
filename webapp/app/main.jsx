@@ -193,7 +193,7 @@ function Header({ vesper, unlocked, onLock }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
-        <a className="brand" href="./" aria-label="Vesper home">
+        <a className="brand" href="/app/" aria-label="Vesper app home">
           <Logo />
           <span>Vesper</span>
         </a>
@@ -1425,8 +1425,9 @@ function App() {
               : "Vesper v0.1. Deposits and withdrawals are public; everything in between stays private."}
           </p>
           <nav>
+            <a href="/">vesper.markets</a>
             <a href="https://github.com/TomciSplinter/vesper/tree/main/audit" target="_blank" rel="noreferrer">
-              Audit
+              Review notes
             </a>
             <a href="https://github.com/TomciSplinter/vesper-ceremony" target="_blank" rel="noreferrer">
               Ceremony
