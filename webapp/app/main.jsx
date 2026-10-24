@@ -1,25 +1,33 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { formatUnits } from "ethers";
 import { Vesper, fmt, parseAmount } from "./vesper.js";
 import { toShares } from "../../src/index.js";
 
-// --------------------------------------------------------------- pieces
+// ------------------------------------------------------------------ helpers
 
-function Logo({ size = 28 }) {
-  // Planet setting below a horizon, gold four-point star above, fading violet lines below.
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <path d="M46 6 L48 14 L56 16 L48 18 L46 26 L44 18 L36 16 L44 14 Z" fill="var(--gold)" />
-      <path d="M12 40 A16 16 0 0 1 44 40 Z" fill="var(--violet)" />
-      <line x1="4" y1="40" x2="60" y2="40" stroke="var(--ink)" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="14" y1="47" x2="50" y2="47" stroke="var(--violet)" strokeWidth="2" strokeLinecap="round" opacity="0.6" />
-      <line x1="20" y1="53" x2="44" y2="53" stroke="var(--violet)" strokeWidth="2" strokeLinecap="round" opacity="0.35" />
-      <line x1="26" y1="59" x2="38" y2="59" stroke="var(--violet)" strokeWidth="2" strokeLinecap="round" opacity="0.15" />
-    </svg>
-  );
+const ONE = 10n ** 18n;
+const short = (s, a = 6, b = 4) => (s && s.length > a + b + 3 ? `${s.slice(0, a)}…${s.slice(-b)}` : s);
+const toNum = (raw) => Number(formatUnits(raw ?? 0n, 18));
+const exact = (raw) => (raw > 0n ? formatUnits(raw, 18).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1") : "0");
+const usdFormat = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const usd = (n) => (n > 0 && n < 0.01 ? "<$0.01" : usdFormat.format(n || 0));
+const companyName = (asset) => (asset?.name || "").replace(/\s*\(.*\)\s*$/, "");
+const tryAmount = (s) => {
+  try {
+    return parseAmount(s);
+  } catch {
+    return null;
+  }
+};
+
+function friendly(e) {
+  const m = e?.shortMessage || e?.reason || e?.message || String(e);
+  if (/user rejected|denied|ACTION_REJECTED/i.test(m) || e?.code === 4001) return "You cancelled in your wallet.";
+  return m.replace(/^Error: /, "");
 }
 
-// Desktop layout from 960px; phones keep the single column.
+// Desktop layout from 960px; phones keep one column.
 function useWide() {
   const q = "(min-width: 960px)";
   const [wide, setWide] = useState(() => typeof window !== "undefined" && window.matchMedia(q).matches);
@@ -32,13 +40,116 @@ function useWide() {
   return wide;
 }
 
-const short = (s, a = 6, b = 4) => (s && s.length > a + b + 3 ? `${s.slice(0, a)}…${s.slice(-b)}` : s);
+// ------------------------------------------------------------------ icons and marks
 
-function Copy({ text, label = "Copy" }) {
+const ICONS = {
+  star: <path d="M12 1.8l1.9 8.3 8.3 1.9-8.3 1.9L12 22.2l-1.9-8.3L1.8 12l8.3-1.9z" fill="currentColor" stroke="none" />,
+  lock: (
+    <>
+      <rect x="5" y="10.5" width="14" height="10" rx="2.5" />
+      <path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12s3.6-6.5 9.5-6.5S21.5 12 21.5 12s-3.6 6.5-9.5 6.5S2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="2.7" />
+    </>
+  ),
+  down: <path d="M12 5v14M6.5 13.5L12 19l5.5-5.5" />,
+  copy: (
+    <>
+      <rect x="8.5" y="8.5" width="12" height="12" rx="2.5" />
+      <path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5" />
+    </>
+  ),
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  chevron: <path d="M6.5 9.5l5.5 5.5 5.5-5.5" />,
+  share: (
+    <>
+      <path d="M12 14.5V3.5M7.5 8L12 3.5 16.5 8" />
+      <path d="M5 12v6.5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V12" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.6v.1" />
+    </>
+  ),
+  alert: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5M12 16.4v.1" />
+    </>
+  ),
+};
+
+function Icon({ name, size = 16, className = "" }) {
+  return (
+    <svg className={`icon ${className}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {ICONS[name]}
+    </svg>
+  );
+}
+
+// A planet setting below the horizon, with the evening star above it.
+function Logo({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" className="logo">
+      <path d="M46 8 L48 15 L55 17 L48 19 L46 26 L44 19 L37 17 L44 15 Z" fill="var(--star)" />
+      <path d="M13 42 A15 15 0 0 1 43 42 Z" fill="var(--planet)" />
+      <line x1="5" y1="42" x2="59" y2="42" stroke="var(--text)" strokeWidth="3" strokeLinecap="round" />
+      <line x1="15" y1="49.5" x2="49" y2="49.5" stroke="var(--planet)" strokeWidth="2.4" strokeLinecap="round" opacity="0.45" />
+      <line x1="23" y1="56.5" x2="41" y2="56.5" stroke="var(--planet)" strokeWidth="2.4" strokeLinecap="round" opacity="0.2" />
+    </svg>
+  );
+}
+
+// The horizon: what's above it is public, what's below it only you can see.
+function Horizon({ className = "" }) {
+  return (
+    <div className={`horizon ${className}`} aria-hidden="true">
+      <span className="horizon-line" />
+      <Icon name="star" size={16} className="horizon-star" />
+      <span className="horizon-line" />
+    </div>
+  );
+}
+
+// A round ticker mark. Small ones show the first letter only, so they stay legible.
+function Ticker({ asset, size = 40 }) {
+  const full = (asset?.symbol || "?").slice(0, 4);
+  const sym = size < 30 ? full[0] : full;
+  const scale = sym.length > 3 ? 0.27 : sym.length > 2 ? 0.3 : sym.length > 1 ? 0.34 : 0.46;
+  return (
+    <span className="ticker" style={{ width: size, height: size, fontSize: Math.round(size * scale) }} aria-hidden="true">
+      {sym}
+    </span>
+  );
+}
+
+function Badge({ kind }) {
+  if (kind === "private")
+    return (
+      <span className="badge private">
+        <Icon name="star" size={10} />
+        Only you
+      </span>
+    );
+  return (
+    <span className="badge public">
+      <Icon name="eye" size={13} />
+      Public
+    </span>
+  );
+}
+
+function Copy({ text, label = "Copy", className = "btn ghost small" }) {
   const [done, setDone] = useState(false);
   return (
     <button
-      className="btn ghost small"
+      className={className}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -47,39 +158,113 @@ function Copy({ text, label = "Copy" }) {
         } catch {}
       }}
     >
+      <Icon name={done ? "check" : "copy"} size={15} />
       {done ? "Copied" : label}
     </button>
   );
 }
 
-function AssetSelect({ vesper, value, onChange }) {
+// ------------------------------------------------------------------ header
+
+function Header({ vesper, unlocked, onLock }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    const esc = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", off);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", off);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
   return (
-    <label className="field">
-      <span>Stock</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} data-testid="asset">
-        {vesper.assets.map((a) => (
-          <option key={a.address} value={a.address}>
-            {a.symbol}
-          </option>
-        ))}
-      </select>
-    </label>
+    <header className="topbar">
+      <div className="topbar-inner">
+        <a className="brand" href="./" aria-label="Vesper home">
+          <Logo />
+          <span>Vesper</span>
+        </a>
+        <div className="top-right">
+          <span className={`chain${unlocked ? " when-wide" : ""}`}>
+            <span className="chain-dot" />
+            {vesper.config.chainName}
+          </span>
+          {unlocked && (
+            <div className="acct" ref={ref}>
+              <button className="acct-btn" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" data-testid="account-menu">
+                {vesper.viewOnly ? "Read-only" : short(vesper.account)}
+                <Icon name="chevron" size={14} />
+              </button>
+              {open && (
+                <div className="menu" role="menu">
+                  <div className="menu-head">
+                    <span className="chain">
+                      <span className="chain-dot" />
+                      {vesper.config.chainName}
+                    </span>
+                    {!vesper.viewOnly && <code className="mono menu-addr">{vesper.account}</code>}
+                  </div>
+                  {!vesper.viewOnly && <Copy text={vesper.account} label="Copy wallet address" className="menu-item" />}
+                  <button
+                    className="menu-item"
+                    role="menuitem"
+                    data-testid="lock"
+                    onClick={() => {
+                      setOpen(false);
+                      onLock();
+                    }}
+                  >
+                    <Icon name="lock" size={15} />
+                    {vesper.viewOnly ? "Close the view key" : "Lock Vesper"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
   );
 }
 
-function RelayerToggle({ value, onChange, fee, symbol }) {
+// ------------------------------------------------------------------ welcome
+
+function HorizonDemo({ symbol = "TSLA" }) {
   return (
-    <label className="toggle">
-      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} data-testid="use-relayer" />
-      <span>
-        Send through a relayer {value && fee !== undefined && fee !== null ? <em>(fee {fmt(fee)} {symbol})</em> : null}
-        <small>{value ? "Your wallet doesn't appear on this transaction." : "Your wallet pays the gas and appears on-chain, which links it to this transaction."}</small>
-      </span>
-    </label>
+    <figure className="demo" aria-label="What's public and what's private with Vesper">
+      <div className="demo-above">
+        <figcaption className="demo-cap">
+          <Icon name="eye" size={14} />
+          What anyone on the chain sees
+        </figcaption>
+        <ul>
+          <li>
+            <span className="who">0x7099…79C8</span> put 5 {symbol} into Vesper
+          </li>
+          <li>
+            Vesper paid 2 {symbol} to <span className="who">0x55c1…eB6c</span>
+          </li>
+        </ul>
+      </div>
+      <Horizon className="demo-horizon" />
+      <div className="demo-below">
+        <p className="demo-cap">
+          <Icon name="star" size={11} />
+          What only you see
+        </p>
+        <ul>
+          <li>You hold 3 {symbol}</li>
+          <li>You paid Ana 1 {symbol}</li>
+          <li>The 2 {symbol} paid out was your own withdrawal</li>
+        </ul>
+      </div>
+    </figure>
   );
 }
-
-// --------------------------------------------------------------- screens
 
 function Welcome({ vesper, onUnlocked, onError }) {
   const [busy, setBusy] = useState(false);
@@ -101,247 +286,217 @@ function Welcome({ vesper, onUnlocked, onError }) {
   return (
     <div className="welcome">
       <div className="welcome-copy">
-      <Logo size={72} />
-      <h1>Hold stocks privately.</h1>
-      <p className="lead">
-        Deposit Robinhood Chain Stock Tokens into Vesper, send them to anyone without the world seeing, and withdraw whenever you like.
-      </p>
-      <button className="btn primary wide" onClick={unlock} disabled={busy} data-testid="unlock">
-        {busy ? "Check your wallet…" : "Connect wallet"}
-      </button>
-      <p className="hint">You'll sign one free message. That signature becomes your private Vesper account. The same wallet always opens the same account.</p>
-
-      <button className="link" onClick={() => setShowView(!showView)}>I have a view key</button>
-      {showView && (
-        <div className="card">
-          <label className="field">
-            <span>View key</span>
-            <input value={viewKey} onChange={(e) => setViewKey(e.target.value)} placeholder="vview:…" data-testid="viewkey-input" />
-          </label>
-          <button
-            className="btn wide"
-            data-testid="open-viewkey"
-            onClick={() => {
-              try {
-                vesper.openViewKey(viewKey);
-                onUnlocked();
-              } catch (e) {
-                onError(e);
-              }
-            }}
-          >
-            Open read-only
-          </button>
-        </div>
-      )}
+        <h1>Hold stocks privately.</h1>
+        <p className="lead">
+          Keep your Robinhood stock tokens in a balance only you can see. Send them to anyone or move them out, and the chain never shows what you hold.
+        </p>
+        <button className="btn primary block" onClick={unlock} disabled={busy} data-testid="unlock">
+          {busy ? "Check your wallet…" : "Connect wallet"}
+        </button>
+        <p className="hint">You'll sign one free message. That signature becomes your private Vesper account, and the same wallet always opens the same account.</p>
+        <button className="btn-text" onClick={() => setShowView(!showView)} aria-expanded={showView}>
+          I have a view key
+        </button>
+        {showView && (
+          <div className="viewkey-open">
+            <label className="field">
+              <span>View key</span>
+              <input value={viewKey} onChange={(e) => setViewKey(e.target.value)} placeholder="vview:…" data-testid="viewkey-input" spellCheck={false} />
+            </label>
+            <button
+              className="btn ghost block"
+              data-testid="open-viewkey"
+              onClick={() => {
+                try {
+                  vesper.openViewKey(viewKey);
+                  onUnlocked();
+                } catch (e) {
+                  onError(e);
+                }
+              }}
+            >
+              Open read-only
+            </button>
+          </div>
+        )}
       </div>
-      <HorizonDemo />
+      <HorizonDemo symbol={vesper.assets[0]?.symbol} />
     </div>
   );
 }
 
-// Desktop welcome picture: the logo's horizon, with what the chain sees above it
-// and what stays private below it.
-function HorizonDemo() {
-  return (
-    <figure className="horizon-demo" aria-label="What's public and what's private with Vesper">
-      <figcaption className="above-label">What anyone on the chain can see</figcaption>
-      <ul className="above">
-        <li><span className="who">0x7099…79C8</span> put 100 vTSLA into Vesper</li>
-        <li>Vesper paid 20 vTSLA to <span className="who">0x55c1…eB6c</span></li>
-      </ul>
-      <div className="horizon-line" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 1 L14 10 L23 12 L14 14 L12 23 L10 14 L1 12 L10 10 Z" fill="var(--gold)" /></svg>
-      </div>
-      <ul className="below">
-        <li>You hold 44 vTSLA</li>
-        <li>You sent 30 vTSLA to Bob</li>
-        <li>That 20 vTSLA was your withdrawal</li>
-      </ul>
-      <p className="below-label">What only you, and anyone you give your view key, can see</p>
-    </figure>
-  );
+// ------------------------------------------------------------------ portfolio
+
+function priceTotals(data, prices, key) {
+  const rows = data?.byAsset || [];
+  if (!prices || !rows.length || rows.some((r) => prices[r.asset.address] == null)) return null;
+  return rows.reduce((s, r) => s + toNum(r[key] ?? 0n) * prices[r.asset.address], 0);
 }
 
-// Desktop: the public side of the account, shown above the horizon.
-function PublicBand({ vesper, data }) {
+function tokenSummary(rows, key) {
+  const held = rows.filter((r) => (r[key] ?? 0n) > 0n);
+  if (!held.length) return { main: "0", unit: rows.length === 1 ? rows[0].asset.symbol : "" };
+  if (held.length === 1) return { main: fmt(held[0][key]), unit: held[0].asset.symbol };
+  return { main: `${held.length}`, unit: "stocks" };
+}
+
+function HorizonCard({ vesper, data, prices }) {
+  const rows = data?.byAsset || [];
+  const privateUsd = priceTotals(data, prices, "total");
+  const walletUsd = vesper.viewOnly ? null : priceTotals(data, prices, "walletBalance");
+  const held = rows.filter((r) => r.total > 0n);
+  const priv = tokenSummary(rows, "total");
+  const wal = tokenSummary(rows, "walletBalance");
+
+  let detail = null;
+  if (data) {
+    if (!held.length) detail = vesper.viewOnly ? "Nothing in this account yet." : "Nothing here yet. Add stock from your wallet to start.";
+    else if (privateUsd !== null) {
+      const parts = held.slice(0, 3).map((r) => `${fmt(r.total)} ${r.asset.symbol}`);
+      detail = parts.join(", ") + (held.length > 3 ? ` and ${held.length - 3} more` : "");
+    } else if (held.length > 1) detail = held.map((r) => `${fmt(r.total)} ${r.asset.symbol}`).join(", ");
+  }
+
   return (
-    <section className="public-band" aria-label="Your public wallet">
-      <div>
-        <h2>Your wallet</h2>
-        <p className="muted small">Public. Anyone can see this address and its balance.</p>
-      </div>
-      <code className="mono">{vesper.account}</code>
-      <div className="public-assets">
-        {(data?.byAsset || []).map(({ asset, walletBalance }) => (
-          <div key={asset.address} className="pub-asset">
-            <span className="muted">{asset.symbol}</span>
-            <strong>{walletBalance === null ? "–" : fmt(walletBalance)}</strong>
+    <section className="horizon-card" aria-label="Your balances">
+      <div className="hc-above">
+        <div className="hc-head">
+          <span>{vesper.viewOnly ? "View key" : "Your wallet"}</span>
+          {!vesper.viewOnly && <Badge kind="public" />}
+        </div>
+        {vesper.viewOnly ? (
+          <p className="hc-note" data-testid="readonly-note">
+            This is a read-only view. It shows this account's private balance and history, but nothing can be moved from here.
+          </p>
+        ) : (
+          <div className="hc-wallet">
+            <span className="hc-wallet-value">{!data ? "…" : walletUsd !== null ? usd(walletUsd) : `${wal.main} ${wal.unit}`.trim()}</span>
+            <span className="hc-wallet-addr">{short(vesper.account)}</span>
           </div>
-        ))}
+        )}
+      </div>
+      <Horizon />
+      <div className="hc-below">
+        <div className="hc-head">
+          <span>Private balance</span>
+          <Badge kind="private" />
+        </div>
+        <div className="hc-big" aria-live="polite">
+          {!data ? (
+            <span className="skeleton" />
+          ) : privateUsd !== null ? (
+            usd(privateUsd)
+          ) : (
+            <>
+              {priv.main}
+              {priv.unit && <span className="hc-unit">{priv.unit}</span>}
+            </>
+          )}
+        </div>
+        {detail && <p className="hc-detail">{detail}</p>}
       </div>
     </section>
   );
 }
 
-function Balances({ vesper, data, onRefresh, refreshing, wide }) {
+function HoldingRow({ row, price }) {
+  const { asset, total, pending, expiring, expiringBy, uiMultiplier, walletBalance } = row;
+  const split = uiMultiplier !== ONE;
   return (
-    <section className="card">
-      <div className="row between">
-        <h2>{vesper.viewOnly ? "Private balance, read-only" : "Private balance"}</h2>
-        <button className="btn ghost small" onClick={onRefresh} disabled={refreshing} data-testid="refresh">
+    <li className="holding" data-testid={`balance-${asset.symbol}`}>
+      <Ticker asset={asset} />
+      <div className="holding-body">
+        <div className="holding-top">
+          <span className="holding-sym">{asset.symbol}</span>
+          <span className="holding-amt num" data-testid={`private-${asset.symbol}`}>
+            {fmt(total)}
+          </span>
+        </div>
+        <div className="holding-sub">
+          <span>{companyName(asset)}</span>
+          {price != null && <span className="num">{usd(toNum(total) * price)}</span>}
+        </div>
+        {split && <div className="holding-note">= {fmt(toShares(total, uiMultiplier))} shares</div>}
+        {pending > 0n && (
+          <div className="holding-note warn" data-testid={`pending-${asset.symbol}`}>
+            {fmt(pending)} waiting for approval
+          </div>
+        )}
+        {expiring > 0n && (
+          <div className="holding-note warn" data-testid={`expiring-${asset.symbol}`}>
+            {fmt(expiring)} was removed from the approved list: withdraw it privately by {new Date(expiringBy).toLocaleDateString()}
+          </div>
+        )}
+        {walletBalance !== null && walletBalance > 0n && <div className="holding-note">In your wallet: {fmt(walletBalance)}</div>}
+      </div>
+    </li>
+  );
+}
+
+function Holdings({ data, prices, onRefresh, refreshing }) {
+  const [showAll, setShowAll] = useState(false);
+  const rows = data?.byAsset || [];
+  const active = rows.filter((r) => r.total > 0n || r.pending > 0n || r.expiring > 0n || (r.walletBalance ?? 0n) > 0n);
+  const shown = showAll || !active.length ? rows : active;
+  return (
+    <section className="panel holdings">
+      <div className="panel-head">
+        <h2>Holdings</h2>
+        <button className="btn-text" onClick={onRefresh} disabled={refreshing} data-testid="refresh">
           {refreshing ? "Scanning…" : "Refresh"}
         </button>
       </div>
-      {vesper.viewOnly && (
-        <p className="note" data-testid="readonly-note">You're viewing this account with a view key. You can see its balance but can't move anything.</p>
+      {!data && <p className="muted">Scanning the pool for your private notes…</p>}
+      {data && (
+        <ul className="holding-list">
+          {shown.map((r) => (
+            <HoldingRow key={r.asset.address} row={r} price={prices?.[r.asset.address]} />
+          ))}
+        </ul>
       )}
-      {!data && <p className="muted">Scanning the pool for your notes…</p>}
-      {data &&
-        data.byAsset.map(({ asset, total, pending, expiring, expiringBy, notes, uiMultiplier, walletBalance }) => (
-          <div className="asset" key={asset.address} data-testid={`balance-${asset.symbol}`}>
-            <div>
-              <div className="sym">{asset.symbol}</div>
-              {pending > 0n && (
-                <div className="pending small" data-testid={`pending-${asset.symbol}`}>
-                  {fmt(pending)} waiting for approval
-                </div>
-              )}
-              {expiring > 0n && (
-                <div className="pending small" data-testid={`expiring-${asset.symbol}`}>
-                  {fmt(expiring)} was removed from the approved list: withdraw it privately by {new Date(expiringBy).toLocaleDateString()}
-                </div>
-              )}
-              <div className="muted small">
-                {notes.length} note{notes.length === 1 ? "" : "s"}
-                {walletBalance !== null && !wide ? `, wallet ${fmt(walletBalance)}` : ""}
-              </div>
-            </div>
-            <div className="amt">
-              <span data-testid={`private-${asset.symbol}`}>{fmt(total)}</span>
-              {uiMultiplier !== 10n ** 18n && <div className="muted small">= {fmt(toShares(total, uiMultiplier))} shares</div>}
-            </div>
-          </div>
-        ))}
-    </section>
-  );
-}
-
-function ActionForm({ vesper, kind, data, run }) {
-  const [asset, setAsset] = useState(vesper.assets[0]?.address);
-  const [amount, setAmount] = useState("");
-  const [to, setTo] = useState("");
-  const [useRelayer, setUseRelayer] = useState(kind !== "deposit" && !!vesper.config.relayers?.length);
-  const [fee, setFee] = useState(null);
-  const symbol = vesper.asset(asset)?.symbol;
-  const row = data?.byAsset.find((b) => b.asset.address === asset);
-
-  useEffect(() => {
-    let live = true;
-    if (kind === "deposit" || !useRelayer) return setFee(null);
-    vesper.relayerFee(asset).then((r) => live && setFee(r ? r.fee : null)).catch(() => live && setFee(null));
-    return () => {
-      live = false;
-    };
-  }, [asset, useRelayer, kind]);
-
-  const submit = () =>
-    run(async (onStep) => {
-      const amt = parseAmount(amount);
-      if (kind === "deposit") return vesper.deposit(asset, amt, onStep);
-      if (kind === "send") return vesper.send(asset, amt, to, { useRelayer }, onStep);
-      return vesper.withdraw(asset, amt, to, { useRelayer }, onStep);
-    });
-
-  const titles = {
-    deposit: ["Deposit", "Move stock tokens from your wallet into your private balance."],
-    send: ["Send privately", "Send to a Vesper address. Nobody can see who sent it, who got it, or how much."],
-    withdraw: ["Withdraw", "Move stock back out to any wallet. A brand-new address keeps it unlinked from you."],
-  };
-
-  return (
-    <section className="card" data-testid={`form-${kind}`}>
-      <h2>{titles[kind][0]}</h2>
-      <p className="muted">{titles[kind][1]}</p>
-      <AssetSelect vesper={vesper} value={asset} onChange={setAsset} />
-      <label className="field">
-        <span>
-          Amount {row && kind === "send" && <em>· private {fmt(row.total)}</em>}
-          {row && kind === "withdraw" && <em>· available {fmt(row.approved)}</em>}
-          {row && kind === "deposit" && row.walletBalance !== null && <em>· wallet {fmt(row.walletBalance)}</em>}
-        </span>
-        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" data-testid="amount" />
-      </label>
-      {kind === "send" && (
-        <label className="field">
-          <span>Their Vesper address</span>
-          <textarea rows={3} value={to} onChange={(e) => setTo(e.target.value)} placeholder="0x… (long address from their Receive tab)" data-testid="to" />
-          <small className="muted">The person you pay can see which public wallet first deposited this money, and how much it deposited. Nobody else can.</small>
-        </label>
-      )}
-      {kind === "withdraw" && (
-        <label className="field">
-          <span>To wallet address</span>
-          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="0x…" data-testid="to" />
-          {vesper.account && to && to.toLowerCase() === vesper.account.toLowerCase() && (
-            <small className="warn">This is your connected wallet. Anyone watching can link it to this withdrawal.</small>
-          )}
-        </label>
-      )}
-      {kind !== "deposit" && <RelayerToggle value={useRelayer} onChange={setUseRelayer} fee={fee} symbol={symbol} />}
-      {kind === "deposit" && <p className="hint">Deposits come from your wallet, so they're public. What you do afterwards is private.</p>}
-      <button className="btn primary wide" onClick={submit} data-testid={`submit-${kind}`}>
-        {titles[kind][0]}
-      </button>
-      {kind === "withdraw" && row && row.pending > 0n && (
-        <div className="exit-box">
-          <p className="small">
-            {fmt(row.pending)} {symbol} is waiting for approval, so it can't be withdrawn privately yet. You can wait, or return it to the wallet
-            that made the original deposit. If this money was sent to you, that is the sender's wallet, not yours. Returning is public.
-          </p>
-          <button className="btn wide" onClick={() => run((s) => vesper.returnToDepositor(asset, s))} data-testid="return-to-depositor">
-            Return to depositing wallet
-          </button>
-        </div>
-      )}
-      {kind !== "deposit" && row && row.notes.length > 2 && (
-        <button className="link" onClick={() => run((s) => vesper.combine(asset, { useRelayer }, s))} data-testid="combine">
-          Combine notes ({row.notes.length})
+      {data && shown.length < rows.length && (
+        <button className="btn-text more" onClick={() => setShowAll(true)}>
+          Show all {rows.length} stocks
         </button>
       )}
     </section>
   );
 }
 
-function Receive({ vesper }) {
+function Account({ vesper }) {
+  const [showKey, setShowKey] = useState(false);
   const addr = vesper.keypair.address();
-  return (
-    <section className="card">
-      <h2>Receive privately</h2>
-      <p className="muted">Share this Vesper address. Anyone can send you stock to it inside the pool. It doesn't reveal your wallet.</p>
-      <code className="mono block" data-testid="vesper-address">{addr}</code>
-      <Copy text={addr} label="Copy address" />
-    </section>
-  );
-}
-
-function ViewKey({ vesper }) {
-  const [shown, setShown] = useState(false);
   const key = vesper.keypair.exportViewKey();
   return (
-    <section className="card">
-      <h2>View key</h2>
-      <p className="muted">
-        Give this to an accountant or auditor. It shows them your private balance and history, but they can't move anything. Anyone with it can see
-        all of that, so only share it with people you trust.
-      </p>
-      {shown ? (
+    <section className="panel account">
+      <div className="panel-head">
+        <h2>Receive privately</h2>
+      </div>
+      <p className="muted">Share your Vesper address to get paid inside the pool. It doesn't reveal your wallet.</p>
+      <div className="code-box">
+        <code className="mono" data-testid="vesper-address">
+          {addr}
+        </code>
+      </div>
+      <Copy text={addr} label="Copy address" />
+
+      <div className="panel-rule" />
+      <div className="panel-head">
+        <h2>View key</h2>
+      </div>
+      <p className="muted">Give this to an accountant or auditor. They see your private balance and history but can't move anything, so only share it with people you trust.</p>
+      {showKey ? (
         <>
-          <code className="mono block" data-testid="viewkey">{key}</code>
+          <div className="code-box">
+            <code className="mono" data-testid="viewkey">
+              {key}
+            </code>
+          </div>
           <Copy text={key} label="Copy view key" />
         </>
       ) : (
-        <button className="btn wide" onClick={() => setShown(true)} data-testid="show-viewkey">
+        <button className="btn ghost" onClick={() => setShowKey(true)} data-testid="show-viewkey">
+          <Icon name="eye" size={15} />
           Show view key
         </button>
       )}
@@ -349,25 +504,307 @@ function ViewKey({ vesper }) {
   );
 }
 
-function LinkForm({ vesper, data, run }) {
-  const [asset, setAsset] = useState(vesper.assets[0]?.address);
-  const [amount, setAmount] = useState("");
-  const [fee, setFee] = useState(null);
-  const [created, setCreated] = useState(null);
-  const [links, setLinks] = useState(null);
-  const symbol = vesper.asset(asset)?.symbol;
-  const row = data?.byAsset.find((b) => b.asset.address === asset);
+// ------------------------------------------------------------------ actions
 
+// A native select (so phones show their own picker), drawn as a pill.
+function AssetPicker({ vesper, value, onChange }) {
+  const a = vesper.asset(value);
+  return (
+    <label className="asset-pick">
+      <Ticker asset={a} size={24} />
+      <span className="asset-sym">{a?.symbol}</span>
+      <Icon name="chevron" size={14} />
+      <select value={value} onChange={(e) => onChange(e.target.value)} data-testid="asset" aria-label="Stock">
+        {vesper.assets.map((x) => (
+          <option key={x.address} value={x.address}>
+            {companyName(x) ? `${companyName(x)} (${x.symbol})` : x.symbol}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Rows({ items }) {
+  return (
+    <dl className="rows">
+      {items.filter(Boolean).map(([k, v]) => (
+        <div className="row-kv" key={k}>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// What a block explorer will show about this action.
+function Explorer({ items }) {
+  return (
+    <div className="explorer">
+      <p className="explorer-cap">
+        <Icon name="eye" size={14} />
+        On the explorer
+      </p>
+      <dl className="rows">
+        {items.map(([k, v, seen]) => (
+          <div className="row-kv" key={k}>
+            <dt>{k}</dt>
+            <dd className={seen ? "seen" : "hidden"}>
+              {!seen && <Icon name="lock" size={13} />}
+              {v}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function Switch({ checked, onChange, title, desc }) {
+  return (
+    <label className="switch-row">
+      <span className="switch-text">
+        <span className="switch-title">{title}</span>
+        <span className="switch-desc">{desc}</span>
+      </span>
+      <input type="checkbox" role="switch" className="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} data-testid="use-relayer" />
+    </label>
+  );
+}
+
+function useRelayerFee(vesper, asset, on) {
+  const [fee, setFee] = useState(null);
   useEffect(() => {
     let live = true;
-    vesper.relayerFee(asset).then((r) => live && setFee(r ? r.fee : null)).catch(() => live && setFee(null));
+    if (!on) return setFee(null);
+    vesper
+      .relayerFee(asset)
+      .then((r) => live && setFee(r ? r.fee : null))
+      .catch(() => live && setFee(null));
     return () => {
       live = false;
     };
-  }, [asset]);
+  }, [asset, on]);
+  return fee;
+}
+
+function firstHeld(vesper, data, key) {
+  const r = data?.byAsset.find((b) => (b[key] ?? 0n) > 0n);
+  return r ? r.asset.address : vesper.assets[0]?.address;
+}
+
+const COPY = {
+  deposit: { title: "Add privately", lead: "Move stock from your wallet into your private balance.", well: "You add", cta: "Add privately" },
+  send: { title: "Send privately", lead: "Pay any Vesper address. Nobody else can see who paid whom, or how much.", well: "You send", cta: "Send privately" },
+  withdraw: { title: "Withdraw", lead: "Move stock out to any wallet. A brand-new address keeps it unlinked from you.", well: "You withdraw", cta: "Withdraw" },
+};
+
+function MoveForm({ vesper, kind, data, prices, run }) {
+  const [asset, setAsset] = useState(() => firstHeld(vesper, data, kind === "deposit" ? "walletBalance" : "total"));
+  const [amount, setAmount] = useState("");
+  const [to, setTo] = useState("");
+  const [useRelayer, setUseRelayer] = useState(kind !== "deposit" && !!vesper.config.relayers?.length);
+  const [limit, setLimit] = useState(null);
+  const fee = useRelayerFee(vesper, asset, kind !== "deposit" && useRelayer);
+  const symbol = vesper.asset(asset)?.symbol;
+  const row = data?.byAsset.find((b) => b.asset.address === asset);
+  const price = prices?.[asset];
+  const amt = tryAmount(amount);
+  const copy = COPY[kind];
+
+  useEffect(() => {
+    if (kind !== "deposit") return;
+    let live = true;
+    vesper.pool
+      .assetConfig(asset)
+      .then(([, max]) => live && setLimit(max))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [asset, kind]);
+
+  const feeNow = kind !== "deposit" && useRelayer ? fee ?? 0n : 0n;
+  const available = !row ? null : kind === "deposit" ? row.walletBalance : kind === "send" && !useRelayer ? row.total : row.approved;
+  const availLabel = kind === "deposit" ? "Wallet" : kind === "send" && !useRelayer ? "Private" : "Available";
+  const max = available === null || available === undefined ? null : available > feeNow ? available - feeNow : 0n;
+
+  const submit = () =>
+    run(async (onStep) => {
+      const a = parseAmount(amount);
+      if (kind === "deposit") return vesper.deposit(asset, a, onStep);
+      if (kind === "send") return vesper.send(asset, a, to.trim(), { useRelayer }, onStep);
+      return vesper.withdraw(asset, a, to.trim(), { useRelayer }, onStep);
+    });
+
+  const amountText = (x) => (x ? `${fmt(x)} ${symbol}` : "–");
+  const relayerFeeRow = useRelayer ? ["Relayer fee", fee === null ? "–" : `${fmt(fee)} ${symbol}`] : ["Network fee", "A few cents, paid in ETH"];
+  const rows = {
+    deposit: [
+      ["Network fee", "A few cents, paid in ETH"],
+      ["Deposit limit", limit ? `${fmt(limit)} ${symbol} at a time` : "–"],
+    ],
+    send: [relayerFeeRow, ["They receive", amountText(amt)]],
+    withdraw: [relayerFeeRow, ["Arrives", amountText(amt)]],
+  }[kind];
+  const explorer = {
+    deposit: [
+      ["Your wallet and the amount", "Visible", true],
+      ["Your private balance", "Hidden", false],
+    ],
+    send: useRelayer
+      ? [
+          ["Sent by", "The Vesper relayer", true],
+          ["Your wallet", "Never shows", false],
+          ["Amount and recipient", "Hidden", false],
+        ]
+      : [
+          ["Sent by", "Your wallet", true],
+          ["Amount and recipient", "Hidden", false],
+        ],
+    withdraw: useRelayer
+      ? [
+          ["Paid out by", "The Vesper relayer", true],
+          ["Your wallet", "Never shows", false],
+          ["Receiving address and amount", "Visible", true],
+        ]
+      : [
+          ["Paid out by", "Your wallet", true],
+          ["Receiving address and amount", "Visible", true],
+        ],
+  }[kind];
+
+  return (
+    <div className="form" data-testid={`form-${kind}`}>
+      <div className="form-head">
+        <h2>{copy.title}</h2>
+        <p>{copy.lead}</p>
+      </div>
+
+      <div className="well">
+        <div className="well-top">
+          <span>{copy.well}</span>
+          {available !== null && available !== undefined && (
+            <span className="well-avail">
+              {availLabel} <span className="num">{fmt(available)}</span>
+              {max > 0n && (
+                <button className="max" onClick={() => setAmount(exact(max))}>
+                  Max
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+        <div className="well-main">
+          <input
+            className="amount-input num"
+            inputMode="decimal"
+            autoComplete="off"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0"
+            data-testid="amount"
+            aria-label={`Amount of ${symbol}`}
+          />
+          <AssetPicker vesper={vesper} value={asset} onChange={setAsset} />
+        </div>
+        {price != null && <div className="well-foot num">{usd(amt ? toNum(amt) * price : 0)}</div>}
+      </div>
+
+      {kind === "deposit" && (
+        <>
+          <div className="connector" aria-hidden="true">
+            <Icon name="down" size={14} />
+          </div>
+          <div className="well soft">
+            <div className="well-top">
+              <span>Into your private balance</span>
+              <Badge kind="private" />
+            </div>
+            <div className="well-echo num">
+              {amt ? fmt(amt) : "0"} <span>{symbol}</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {kind === "send" && (
+        <label className="field">
+          <span>To</span>
+          <textarea rows={3} value={to} onChange={(e) => setTo(e.target.value)} placeholder="Their Vesper address, from their Receive privately section" data-testid="to" spellCheck={false} />
+          <small>The person you pay can see which public wallet first deposited this money, and how much it deposited. Nobody else can.</small>
+        </label>
+      )}
+      {kind === "withdraw" && (
+        <label className="field">
+          <span>To wallet address</span>
+          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="0x…" data-testid="to" spellCheck={false} autoComplete="off" />
+          {vesper.account && to && to.trim().toLowerCase() === vesper.account.toLowerCase() && (
+            <small className="warn">This is your connected wallet. Anyone watching can link it to this withdrawal.</small>
+          )}
+        </label>
+      )}
+
+      {kind !== "deposit" && (
+        <Switch
+          checked={useRelayer}
+          onChange={setUseRelayer}
+          title="Hide my wallet"
+          desc={useRelayer ? "The Vesper relayer sends it for a small fee, so your wallet never appears." : "Your wallet pays the gas and appears on-chain next to this transaction."}
+        />
+      )}
+
+      <Rows items={rows} />
+      <Explorer items={explorer} />
+
+      <button className="btn primary block" onClick={submit} data-testid={`submit-${kind}`}>
+        {copy.cta}
+      </button>
+      {kind === "deposit" && <p className="form-note">Deposits come from your wallet, so they're public. What you do afterwards is private.</p>}
+
+      {kind === "withdraw" && row && row.pending > 0n && (
+        <div className="exit-box">
+          <p>
+            {fmt(row.pending)} {symbol} is waiting for approval, so it can't be withdrawn privately yet. You can wait, or return it to the wallet that made the original
+            deposit. If this money was sent to you, that's the sender's wallet, not yours. Returning is public.
+          </p>
+          <button className="btn ghost block" onClick={() => run((s) => vesper.returnToDepositor(asset, s))} data-testid="return-to-depositor">
+            Return to depositing wallet
+          </button>
+        </div>
+      )}
+      {kind !== "deposit" && row && row.notes.length > 2 && (
+        <p className="form-note">
+          Your {symbol} is split into {row.notes.length} notes.{" "}
+          <button className="inline-link" onClick={() => run((s) => vesper.combine(asset, { useRelayer }, s))} data-testid="combine">
+            Combine them
+          </button>{" "}
+          if a payment says it's split across too many.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LinkForm({ vesper, data, prices, run }) {
+  const [asset, setAsset] = useState(() => firstHeld(vesper, data, "approved"));
+  const [amount, setAmount] = useState("");
+  const [created, setCreated] = useState(null);
+  const [links, setLinks] = useState(null);
+  const fee = useRelayerFee(vesper, asset, true);
+  const symbol = vesper.asset(asset)?.symbol;
+  const row = data?.byAsset.find((b) => b.asset.address === asset);
+  const price = prices?.[asset];
+  const amt = tryAmount(amount);
+  const cost = fee === null ? null : 2n * fee;
+  const max = row && cost !== null && row.approved > cost ? row.approved - cost : 0n;
 
   const loadLinks = useCallback(() => {
-    vesper.myLinks().then(setLinks).catch(() => setLinks([]));
+    vesper
+      .myLinks()
+      .then(setLinks)
+      .catch(() => setLinks([]));
   }, [vesper]);
   useEffect(loadLinks, [loadLinks, data]);
 
@@ -381,74 +818,135 @@ function LinkForm({ vesper, data, run }) {
 
   const share = async (url) => {
     try {
-      if (navigator.share) return await navigator.share({ title: "Vesper", text: "Here's some stock for you. Open the link to claim it.", url });
+      if (navigator.share) await navigator.share({ title: "Vesper", text: "Here's some stock for you. Open the link to claim it.", url });
     } catch {}
   };
 
   return (
-    <section className="card" data-testid="form-link">
-      <h2>Send as a link</h2>
-      <p className="muted">Turn stock into a link that works like cash: whoever opens it can claim it, even without a Vesper account or any ETH.</p>
-      <AssetSelect vesper={vesper} value={asset} onChange={setAsset} />
-      <label className="field">
-        <span>
-          Amount they get {row && <em>· available {fmt(row.approved)}</em>}
-        </span>
-        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" data-testid="link-amount" />
-        {fee !== null && (
-          <small className="muted">
-            Plus {fmt(fee)} {symbol} for their claim fee and {fmt(fee)} {symbol} to create it, both paid to the relayer.
-          </small>
-        )}
-      </label>
-      <button className="btn primary wide" onClick={create} data-testid="submit-link">
+    <div className="form" data-testid="form-link">
+      <div className="form-head">
+        <h2>Send as a link</h2>
+        <p>Turn stock into a link that works like cash. Whoever opens it can claim it, even without a Vesper account or any ETH.</p>
+      </div>
+
+      <div className="well">
+        <div className="well-top">
+          <span>They get</span>
+          {row && (
+            <span className="well-avail">
+              Available <span className="num">{fmt(row.approved)}</span>
+              {max > 0n && (
+                <button className="max" onClick={() => setAmount(exact(max))}>
+                  Max
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+        <div className="well-main">
+          <input className="amount-input num" inputMode="decimal" autoComplete="off" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" data-testid="link-amount" aria-label={`Amount of ${symbol}`} />
+          <AssetPicker vesper={vesper} value={asset} onChange={setAsset} />
+        </div>
+        {price != null && <div className="well-foot num">{usd(amt ? toNum(amt) * price : 0)}</div>}
+      </div>
+
+      <Rows
+        items={[
+          ["Fee to create it", fee === null ? "–" : `${fmt(fee)} ${symbol}`],
+          ["Their claim fee, paid by you", fee === null ? "–" : `${fmt(fee)} ${symbol}`],
+          ["Taken from your balance", amt && cost !== null ? `${fmt(amt + cost)} ${symbol}` : "–"],
+        ]}
+      />
+      <Explorer
+        items={[
+          ["Amount and who claims it", "Hidden", false],
+          ["Who can claim it", "Anyone holding the link", true],
+        ]}
+      />
+
+      <button className="btn primary block" onClick={create} data-testid="submit-link">
         Create link
       </button>
 
       {created && (
-        <div className="exit-box" data-testid="link-created">
-          <p className="small">
-            <strong>Your link for {fmt(created.amount)} {vesper.asset(created.asset)?.symbol}.</strong> Anyone who has it can claim it, so send it
-            privately, like cash in an envelope.
+        <div className="created" data-testid="link-created">
+          <p>
+            <strong>
+              Your link for {fmt(created.amount)} {vesper.asset(created.asset)?.symbol}.
+            </strong>{" "}
+            Anyone who has it can claim it, so send it privately, like cash in an envelope.
           </p>
-          <code className="mono block small" data-testid="link-url">{created.url}</code>
-          <div className="row gap">
+          <div className="code-box">
+            <code className="mono" data-testid="link-url">
+              {created.url}
+            </code>
+          </div>
+          <div className="btn-row">
             <Copy text={created.url} label="Copy link" />
             {typeof navigator !== "undefined" && navigator.share && (
-              <button className="btn ghost small" onClick={() => share(created.url)}>Share</button>
+              <button className="btn ghost small" onClick={() => share(created.url)}>
+                <Icon name="share" size={15} />
+                Share
+              </button>
             )}
           </div>
         </div>
       )}
 
       {links && links.length > 0 && (
-        <div className="links-list">
+        <div className="links">
           <h3>Your links</h3>
-          {links.map((l) => (
-            <div className="asset" key={l.index} data-testid={`link-${l.index}`}>
-              <div>
-                <div className="sym">{l.claimed ? "Claimed" : `${fmt(l.amount)} ${l.asset?.symbol || ""}`}</div>
-                <div className="muted small">Link #{l.index + 1}</div>
-              </div>
-              {!l.claimed && l.asset && (
-                <div className="row gap">
-                  <Copy text={l.url} label="Copy" />
-                  <button
-                    className="btn ghost small"
-                    data-testid={`reclaim-${l.index}`}
-                    onClick={() => run((st) => vesper.claimLink(l.keypair, l.asset.address, "private", st))}
-                  >
-                    Take back
-                  </button>
+          <ul>
+            {links.map((l) => (
+              <li className="link-row" key={l.index} data-testid={`link-${l.index}`}>
+                <div>
+                  <div className="link-title">{l.claimed ? "Claimed" : `${fmt(l.receive)} ${l.asset?.symbol || ""}`}</div>
+                  <div className="link-sub">Link {l.index + 1}</div>
                 </div>
-              )}
-            </div>
-          ))}
+                {!l.claimed && l.asset && (
+                  <div className="btn-row">
+                    <Copy text={l.url} label="Copy" />
+                    <button className="btn ghost small" data-testid={`reclaim-${l.index}`} onClick={() => run((st) => vesper.claimLink(l.keypair, l.asset.address, "private", st))}>
+                      Take back
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
+      )}
+    </div>
+  );
+}
+
+const TABS = [
+  ["deposit", "Add"],
+  ["send", "Send"],
+  ["link", "Link"],
+  ["withdraw", "Withdraw"],
+];
+
+function Actions({ vesper, data, prices, run, tab, setTab }) {
+  return (
+    <section className="panel actions">
+      <div className="segmented" role="tablist" aria-label="What do you want to do">
+        {TABS.map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "link" ? (
+        <LinkForm vesper={vesper} data={data} prices={prices} run={run} />
+      ) : (
+        <MoveForm key={tab} vesper={vesper} kind={tab} data={data} prices={prices} run={run} />
       )}
     </section>
   );
 }
+
+// ------------------------------------------------------------------ claim links
 
 function ClaimScreen({ vesper, secret, unlocked, onUnlock, run, onClose }) {
   const [info, setInfo] = useState(null);
@@ -456,7 +954,10 @@ function ClaimScreen({ vesper, secret, unlocked, onUnlock, run, onClose }) {
   const [to, setTo] = useState("");
 
   useEffect(() => {
-    vesper.openLink(secret).then(setInfo).catch((e) => setErr(friendly(e)));
+    vesper
+      .openLink(secret)
+      .then(setInfo)
+      .catch((e) => setErr(friendly(e)));
   }, [secret]);
 
   const item = info?.items?.[0];
@@ -472,65 +973,99 @@ function ClaimScreen({ vesper, secret, unlocked, onUnlock, run, onClose }) {
   const claimTo = () => run((step) => vesper.claimLink(info.keypair, item.asset.address, to.trim(), step), onClose);
 
   return (
-    <section className="card claim" data-testid="claim-screen">
-      <Logo size={48} />
-      <h2>You've been sent stock</h2>
-      {err && <p className="error" data-testid="claim-error">{err}</p>}
+    <section className="claim" data-testid="claim-screen">
+      <Logo size={44} />
+      <h1 className="claim-title">You've been sent stock</h1>
+      {err && (
+        <p className="error" data-testid="claim-error">
+          {err}
+        </p>
+      )}
       {!info && !err && <p className="muted">Opening the link…</p>}
-      {info && !item && <p className="muted" data-testid="claim-empty">This link has already been claimed.</p>}
+      {info && !item && (
+        <p className="muted" data-testid="claim-empty">
+          This link has already been claimed.
+        </p>
+      )}
       {item && (
         <>
-          <p className="claim-amount" data-testid="claim-amount">
+          <div className="claim-amount num" data-testid="claim-amount">
             {fmt(item.receive)} <span>{item.asset.symbol}</span>
-          </p>
-          <p className="muted small">{item.asset.name}. Claiming is free for you: the relayer pays the gas.</p>
-          <button className="btn primary wide" onClick={claimPrivate} data-testid="claim-private">
+          </div>
+          <p className="claim-sub">{companyName(item.asset)}. Claiming is free for you: the relayer pays the gas.</p>
+          <Horizon className="claim-horizon" />
+          <button className="btn primary block" onClick={claimPrivate} data-testid="claim-private">
             Claim to my private Vesper balance
           </button>
           <p className="hint">Connect any wallet and sign one free message. Nobody will see it arrive.</p>
-          <div className="or">or</div>
+          <div className="or">
+            <span>or</span>
+          </div>
           <label className="field">
             <span>Send it to a wallet address</span>
-            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="0x…" data-testid="claim-to" />
+            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="0x…" data-testid="claim-to" spellCheck={false} autoComplete="off" />
           </label>
-          <button className="btn wide" onClick={claimTo} data-testid="claim-address">
+          <button className="btn ghost block" onClick={claimTo} data-testid="claim-address">
             Send to this address
           </button>
         </>
       )}
-      <button className="link" onClick={onClose}>Not now</button>
+      <button className="btn-text" onClick={onClose}>
+        Not now
+      </button>
     </section>
   );
 }
+
+// ------------------------------------------------------------------ progress
 
 function Progress({ state, vesper, onClose }) {
   if (!state) return null;
   const link = state.txHash && vesper.explorerTx(state.txHash);
   return (
-    <div className="overlay" role="dialog" aria-live="polite">
-      <div className="card sheet" data-testid="progress">
+    <div className="overlay" role="dialog" aria-modal="true" aria-live="polite">
+      <div className="sheet" data-testid="progress">
         {state.status === "working" && (
           <>
-            <div className="spinner" />
-            <p>{state.step}</p>
+            <div className="working" aria-hidden="true">
+              <Horizon />
+            </div>
+            <p className="sheet-title">{state.step}</p>
+            <p className="sheet-sub">This can take up to a minute. Keep this tab open.</p>
           </>
         )}
         {state.status === "done" && (
           <>
-            <h2 data-testid="done">Done</h2>
+            <div className="mark ok" aria-hidden="true">
+              <Icon name="check" size={22} />
+            </div>
+            <h2 className="sheet-title" data-testid="done">
+              Done
+            </h2>
             {link ? (
-              <a href={link} target="_blank" rel="noreferrer">View on explorer</a>
+              <a className="sheet-link" href={link} target="_blank" rel="noreferrer">
+                View on the explorer
+              </a>
             ) : (
-              <code className="mono small">{short(state.txHash, 10, 8)}</code>
+              <code className="mono sheet-sub">{short(state.txHash, 10, 8)}</code>
             )}
-            <button className="btn primary wide" onClick={onClose} data-testid="close">OK</button>
+            <button className="btn primary block" onClick={onClose} data-testid="close">
+              OK
+            </button>
           </>
         )}
         {state.status === "error" && (
           <>
-            <h2>That didn't work</h2>
-            <p className="error" data-testid="error">{state.error}</p>
-            <button className="btn wide" onClick={onClose} data-testid="close">Close</button>
+            <div className="mark bad" aria-hidden="true">
+              <Icon name="alert" size={22} />
+            </div>
+            <h2 className="sheet-title">That didn't work</h2>
+            <p className="error" data-testid="error">
+              {state.error}
+            </p>
+            <button className="btn ghost block" onClick={onClose} data-testid="close">
+              Close
+            </button>
           </>
         )}
       </div>
@@ -538,13 +1073,7 @@ function Progress({ state, vesper, onClose }) {
   );
 }
 
-function friendly(e) {
-  const m = e?.shortMessage || e?.reason || e?.message || String(e);
-  if (/user rejected|denied|ACTION_REJECTED/i.test(m) || e?.code === 4001) return "You cancelled in your wallet.";
-  return m.replace(/^Error: /, "");
-}
-
-// --------------------------------------------------------------- app
+// ------------------------------------------------------------------ app
 
 function App() {
   const [vesper, setVesper] = useState(null);
@@ -552,26 +1081,40 @@ function App() {
   const [unlocked, setUnlocked] = useState(false);
   const [tab, setTab] = useState("deposit");
   const [data, setData] = useState(null);
+  const [prices, setPrices] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState(null);
   const [claimSecret, setClaimSecret] = useState(() => {
     const m = /claim=([^&]+)/.exec(typeof location !== "undefined" ? location.hash : "");
     return m ? decodeURIComponent(m[1]) : null;
   });
+  const wide = useWide();
+
   const closeClaim = () => {
     setClaimSecret(null);
     try {
       history.replaceState(null, "", location.pathname + location.search);
     } catch {}
   };
-  const wide = useWide();
-  useEffect(() => {
-    if (wide && (tab === "receive" || tab === "viewkey")) setTab("deposit");
-  }, [wide, tab]);
 
   useEffect(() => {
-    Vesper.load().then(setVesper).catch((e) => setLoadError(friendly(e)));
+    Vesper.load()
+      .then(setVesper)
+      .catch((e) => setLoadError(friendly(e)));
   }, []);
+
+  // Prices for every listed stock, refreshed every minute (says nothing about your holdings).
+  useEffect(() => {
+    if (!vesper?.config.pricesUrl) return;
+    let live = true;
+    const load = () => vesper.prices().then((p) => live && p && setPrices(p));
+    load();
+    const t = setInterval(load, 60_000);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [vesper]);
 
   const refresh = useCallback(async () => {
     if (!vesper?.keypair) return;
@@ -601,101 +1144,80 @@ function App() {
     }
   }
 
-  if (loadError) return <div className="shell"><p className="error">{loadError}</p></div>;
-  if (!vesper) return <div className="shell"><div className="spinner" /></div>;
+  if (loadError)
+    return (
+      <div className="page">
+        <p className="error">{loadError}</p>
+      </div>
+    );
+  if (!vesper)
+    return (
+      <div className="page loading" aria-label="Loading">
+        <Horizon />
+      </div>
+    );
 
-  const tabs = vesper.viewOnly
-    ? []
-    : [
-        ["deposit", "Deposit"],
-        ["send", "Send"],
-        ["link", "Link"],
-        ["withdraw", "Withdraw"],
-        ...(wide ? [] : [["receive", "Receive"], ["viewkey", "View key"]]),
-      ];
+  const lock = () => {
+    vesper.lock();
+    setUnlocked(false);
+    setData(null);
+  };
+  const notice = vesper.config.notice || (vesper.config.testnet ? "Testnet. Test tokens only, nothing here has real value." : null);
+  const actions = !vesper.viewOnly && <Actions vesper={vesper} data={data} prices={prices} run={run} tab={tab} setTab={setTab} />;
 
   return (
-    <div className={`shell${wide ? " is-wide" : ""}`}>
-      <header>
-        <div className="brand">
-          <Logo />
-          <span>Vesper</span>
-        </div>
-        <div className="row gap">
-          <span className="pill">{vesper.config.chainName}</span>
-          {unlocked && (
-            <button
-              className="btn ghost small"
-              onClick={() => {
-                vesper.lock();
-                setUnlocked(false);
-                setData(null);
-              }}
-              data-testid="lock"
-            >
-              {vesper.viewOnly ? "Close" : short(vesper.account)}
-            </button>
-          )}
-        </div>
-      </header>
+    <div className={`app${wide ? " is-wide" : ""}`}>
+      <Header vesper={vesper} unlocked={unlocked} onLock={lock} />
+      <div className="page">
+        {notice && (
+          <p className="notice">
+            <Icon name="info" size={15} />
+            <span>{notice}</span>
+          </p>
+        )}
+        {unlocked && vesper.accountWarning && (
+          <p className="notice warn" data-testid="account-warning">
+            <Icon name="alert" size={15} />
+            <span>{vesper.accountWarning}</span>
+          </p>
+        )}
 
-      {vesper.config.notice ? (
-        <div className="banner">{vesper.config.notice}</div>
-      ) : (
-        vesper.config.testnet && <div className="banner">Testnet. Unaudited software. Don't use real funds.</div>
-      )}
-      {unlocked && vesper.accountWarning && <div className="banner warn-banner" data-testid="account-warning">{vesper.accountWarning}</div>}
-
-      {claimSecret ? (
-        <ClaimScreen vesper={vesper} secret={claimSecret} unlocked={unlocked && !vesper.viewOnly} onUnlock={() => setUnlocked(true)} run={run} onClose={closeClaim} />
-      ) : !unlocked ? (
-        <Welcome vesper={vesper} onUnlocked={() => setUnlocked(true)} onError={(e) => setProgress({ status: "error", error: friendly(e) })} />
-      ) : (
-        <main className={wide ? "desk" : ""}>
-          {wide && !vesper.viewOnly && <PublicBand vesper={vesper} data={data} />}
-          {wide && (
-            <div className="horizon-rule" aria-hidden="true">
-              <span>Above: public</span>
-              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 1 L14 10 L23 12 L14 14 L12 23 L10 14 L1 12 L10 10 Z" fill="var(--gold)" /></svg>
-              <span>Below: private</span>
+        {claimSecret ? (
+          <ClaimScreen vesper={vesper} secret={claimSecret} unlocked={unlocked && !vesper.viewOnly} onUnlock={() => setUnlocked(true)} run={run} onClose={closeClaim} />
+        ) : !unlocked ? (
+          <Welcome vesper={vesper} onUnlocked={() => setUnlocked(true)} onError={(e) => setProgress({ status: "error", error: friendly(e) })} />
+        ) : (
+          <main className="dash">
+            <div className="col-main">
+              <HorizonCard vesper={vesper} data={data} prices={prices} />
+              {!wide && actions}
+              <Holdings data={data} prices={prices} onRefresh={refresh} refreshing={refreshing} />
+              {!vesper.viewOnly && <Account vesper={vesper} />}
             </div>
-          )}
-          <div className="private-grid">
-            <div className="private-side">
-              <Balances vesper={vesper} data={data} onRefresh={refresh} refreshing={refreshing} wide={wide} />
-              {wide && !vesper.viewOnly && <Receive vesper={vesper} />}
-              {wide && !vesper.viewOnly && <ViewKey vesper={vesper} />}
-            </div>
-            {!vesper.viewOnly && (
-              <div className="action-side">
-                <nav className="tabs">
-                  {tabs.map(([k, label]) => (
-                    <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)} data-testid={`tab-${k}`}>
-                      {label}
-                    </button>
-                  ))}
-                </nav>
-                {["deposit", "send", "withdraw"].includes(tab) && <ActionForm key={tab} vesper={vesper} kind={tab} data={data} run={run} />}
-                {tab === "link" && <LinkForm vesper={vesper} data={data} run={run} />}
-                {!wide && tab === "receive" && <Receive vesper={vesper} />}
-                {!wide && tab === "viewkey" && <ViewKey vesper={vesper} />}
-              </div>
-            )}
-          </div>
-        </main>
-      )}
+            {wide && actions && <aside className="col-side">{actions}</aside>}
+          </main>
+        )}
 
+        <footer className="foot">
+          <p>
+            {vesper.config.testnet
+              ? "Vesper v0.1 on testnet."
+              : "Vesper v0.1. Self-audited, not externally audited. Deposits and withdrawals are public; everything in between stays private."}
+          </p>
+          <nav>
+            <a href="https://github.com/TomciSplinter/vesper/tree/main/audit" target="_blank" rel="noreferrer">
+              Audit
+            </a>
+            <a href="https://github.com/TomciSplinter/vesper-ceremony" target="_blank" rel="noreferrer">
+              Ceremony
+            </a>
+            <a href="https://github.com/TomciSplinter/vesper" target="_blank" rel="noreferrer">
+              Source code
+            </a>
+          </nav>
+        </footer>
+      </div>
       <Progress state={progress} vesper={vesper} onClose={() => setProgress(null)} />
-      <footer className="muted small">
-        {vesper.config.testnet ? "v0.1 · testnet" : "v0.1 · self-audited, not externally audited · "}
-        {!vesper.config.testnet && (
-          <a href="https://github.com/TomciSplinter/vesper/tree/main/audit" target="_blank" rel="noreferrer">audit</a>
-        )}
-        {!vesper.config.testnet && " · "}
-        {!vesper.config.testnet && (
-          <a href="https://github.com/TomciSplinter/vesper-ceremony" target="_blank" rel="noreferrer">ceremony</a>
-        )}
-      </footer>
     </div>
   );
 }

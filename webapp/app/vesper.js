@@ -221,6 +221,24 @@ export class Vesper {
     return out;
   }
 
+  /** USD value of one token per asset address, or null when prices aren't available. */
+  async prices() {
+    if (!this.config.pricesUrl) return null;
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 8000);
+      const res = await fetch(this.config.pricesUrl, { signal: ctl.signal });
+      clearTimeout(t);
+      if (!res.ok) return null;
+      const { prices } = await res.json();
+      const out = {};
+      for (const [k, v] of Object.entries(prices || {})) out[getAddress(k)] = Number(v);
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
   async relayer() {
     const url = this.config.relayers?.[0];
     if (!url) return null;
@@ -275,7 +293,7 @@ export class Vesper {
       onStep("Approve Vesper to move your tokens (one time)…");
       await (await token.approve(this.config.pool, amount)).wait();
     }
-    onStep("Creating your private proof (this can take a little while)…");
+    onStep("Creating your private proof…");
     const prepared = await this._prepare({ asset, depositor: this.account, outputs: [new Utxo({ amount, keypair: this.keypair, asset })] });
     const hash = await this._sendOwn(prepared, asset, onStep);
     await this._requestApproval(onStep);
@@ -304,7 +322,7 @@ export class Vesper {
     // A relayer fee leaves the pool, so relayed sends need approved money.
     const inputs = await this._pickNotes(asset, amount + fee, { asp, approvedOnly: !!relayer });
     const change = inputs.reduce((s, n) => s + n.amount, 0n) - amount - fee;
-    onStep("Creating your private proof (this can take a little while)…");
+    onStep("Creating your private proof…");
     const prepared = await this._prepare({
       asset,
       inputs,
@@ -325,7 +343,7 @@ export class Vesper {
     const { fee, relayer } = await this._feeFor(asset, useRelayer);
     const inputs = await this._pickNotes(asset, amount + fee, { asp, approvedOnly: true });
     const change = inputs.reduce((s, n) => s + n.amount, 0n) - amount - fee;
-    onStep("Creating your private proof (this can take a little while)…");
+    onStep("Creating your private proof…");
     const prepared = await this._prepare({
       asset,
       inputs,
@@ -384,7 +402,7 @@ export class Vesper {
     const two = [...group].sort((a, b) => (a.amount < b.amount ? 1 : -1)).slice(0, 2);
     const total = sum(two);
     if (total <= fee) throw new Error("Nothing to combine.");
-    onStep("Creating your private proof (this can take a little while)…");
+    onStep("Creating your private proof…");
     const prepared = await this._prepare({
       asset,
       inputs: two,
@@ -421,7 +439,7 @@ export class Vesper {
     // The claim pays a relayer fee, so the link must hold approved money.
     const inputs = await this._pickNotes(asset, linkAmount + fee, { asp, approvedOnly: true });
     const change = sum(inputs) - linkAmount - fee;
-    onStep("Creating your private proof (this can take a little while)…");
+    onStep("Creating your private proof…");
     const prepared = await this._prepare({
       asset,
       inputs,
@@ -437,18 +455,18 @@ export class Vesper {
   /** The links this account made: [{ index, url, asset, amount, claimed }], newest first. */
   async myLinks() {
     this._needSpender();
-    const { links } = await scanLinks(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 });
+    const [{ links }, relayer] = await Promise.all([
+      scanLinks(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 }),
+      this.relayer().catch(() => null),
+    ]);
     return links
       .map((l) => {
         const notes = l.notes.length ? l.notes : [];
-        return {
-          index: l.index,
-          url: this.linkUrl(l.keypair),
-          keypair: l.keypair,
-          claimed: l.claimed,
-          asset: notes[0] ? this.assets.find((a) => BigInt(a.address) === notes[0].asset) : null,
-          amount: sum(notes),
-        };
+        const asset = notes[0] ? this.assets.find((a) => BigInt(a.address) === notes[0].asset) : null;
+        const amount = sum(notes);
+        // What the receiver gets: the link holds the amount plus their claim fee.
+        const fee = asset && relayer?.minFees?.[asset.address] !== undefined ? BigInt(relayer.minFees[asset.address]) : 0n;
+        return { index: l.index, url: this.linkUrl(l.keypair), keypair: l.keypair, claimed: l.claimed, asset, amount, receive: amount > fee ? amount - fee : amount };
       })
       .reverse();
   }
@@ -482,7 +500,7 @@ export class Vesper {
     const total = sum(mine);
     if (total <= fee) throw new Error("This link holds less than the relayer fee.");
     const asp = await this.associationSet();
-    onStep("Creating the proof (this can take a little while)…");
+    onStep("Creating the proof…");
     let prepared;
     if (to === "private") {
       this._needSpender();

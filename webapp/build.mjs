@@ -43,6 +43,13 @@ await esbuild.build({
   logLevel: "warning",
 });
 fs.copyFileSync(path.join(here, "app", "styles.css"), path.join(dist, "app.css"));
+// Self-hosted fonts (a privacy app shouldn't make visitors' browsers call a font CDN).
+fs.mkdirSync(path.join(dist, "fonts"), { recursive: true });
+const fontFiles = {
+  "instrument-sans.woff2": "@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2",
+  "newsreader.woff2": "@fontsource-variable/newsreader/files/newsreader-latin-opsz-normal.woff2",
+};
+for (const [name, src] of Object.entries(fontFiles)) fs.copyFileSync(path.join(root, "node_modules", src), path.join(dist, "fonts", name));
 fs.copyFileSync(path.join(here, "index.html"), path.join(dist, "index.html"));
 
 // Circuit files are named after a hash of their contents, so a browser can never use a

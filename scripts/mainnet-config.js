@@ -26,9 +26,9 @@ const config = {
   assets: assets.map((a) => ({ address: a.address, symbol: a.symbol, name: `${a.name} (Robinhood Stock Token)` })),
   relayers: ["/api"],
   aspUpdateUrl: "/api/asp-update",
+  pricesUrl: "/api/prices",
   maxRelayerFees: Object.fromEntries(assets.map((a) => [a.address, a.maxRelayerFeeTokens])),
-  notice:
-    "Early version: self-audited (findings and fixes published), not externally audited. Deposits are limited to about $2,000 each. Use at your own risk.",
+  notice: "Early version. Self-audited, not externally audited. Deposits up to about $2,000 each.",
 };
 fs.writeFileSync(path.join(root, "webapp", "config", "robinhood.json"), JSON.stringify(config, null, 2) + "\n");
 console.log(`Wrote webapp/config/robinhood.json (${assets.length} assets, pool ${dep.pool})`);

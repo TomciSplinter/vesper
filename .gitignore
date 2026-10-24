@@ -14,3 +14,4 @@ webapp/dist/*.map
 webapp/e2e/*.config.json
 webapp/e2e/screenshots/
 deployments/localhost.json
+webapp/e2e/preview-state.json

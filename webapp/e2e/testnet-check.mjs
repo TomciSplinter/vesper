@@ -164,7 +164,7 @@ async function main() {
   await page.selectOption('[data-testid="asset"]', vtsla);
   await page.fill('[data-testid="amount"]', "1");
   await page.fill('[data-testid="to"]', fresh);
-  await page.waitForFunction(() => /fee 0\.1/.test(document.querySelector('[data-testid="form-withdraw"]').textContent));
+  await page.waitForFunction(() => /fee\s*0\.1/.test(document.querySelector('[data-testid="form-withdraw"]').textContent));
   const nonce = await provider.getTransactionCount(wallet.address);
   await page.click('[data-testid="submit-withdraw"]');
   await done("relayed withdraw");
@@ -175,9 +175,9 @@ async function main() {
   // View key on the live chain: read-only balance must equal the owner's real balance.
   const ownerBalance = await priv();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.click('[data-testid="tab-viewkey"]');
   await page.click('[data-testid="show-viewkey"]');
   const viewKey = (await page.textContent('[data-testid="viewkey"]')).trim();
+  await page.click('[data-testid="account-menu"]');
   await page.click('[data-testid="lock"]');
   await page.click("text=I have a view key");
   await page.fill('[data-testid="viewkey-input"]', viewKey);

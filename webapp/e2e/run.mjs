@@ -239,7 +239,7 @@ async function main() {
   await page.click('[data-testid="tab-send"]');
   await page.fill('[data-testid="amount"]', "30");
   await page.fill('[data-testid="to"]', bob.address());
-  await page.waitForFunction(() => /fee 0\.5/.test(document.querySelector('[data-testid="form-send"]').textContent));
+  await page.waitForFunction(() => /fee\s*0\.5/.test(document.querySelector('[data-testid="form-send"]').textContent));
   await page.screenshot({ path: path.join(shots, "4-send.png") });
   const userNonce = await provider.getTransactionCount(userAddr);
   await page.click('[data-testid="submit-send"]');
@@ -311,7 +311,6 @@ async function main() {
   check(true, "after a 2-for-1 split the balance shows 44 tokens = 88 shares");
 
   // Receive tab shows the same address the wallet derives
-  await page.click('[data-testid="tab-receive"]');
   await page.screenshot({ path: path.join(shots, "6-receive.png") });
   const shown = (await page.textContent('[data-testid="vesper-address"]')).trim();
   const sit = require("../../src").signInTypedData(31337);
@@ -319,10 +318,10 @@ async function main() {
   check(shown === expected, "Receive tab shows this wallet's Vesper address");
 
   // View key → read-only mode
-  await page.click('[data-testid="tab-viewkey"]');
   await page.click('[data-testid="show-viewkey"]');
   const viewKey = (await page.textContent('[data-testid="viewkey"]')).trim();
   check(viewKey.startsWith("vview:"), "view key can be exported");
+  await page.click('[data-testid="account-menu"]');
   await page.click('[data-testid="lock"]');
   await page.click("text=I have a view key");
   await page.fill('[data-testid="viewkey-input"]', viewKey);
@@ -337,6 +336,7 @@ async function main() {
   await page.screenshot({ path: path.join(shots, "5-viewkey.png") });
 
   // ------------------------------------------------------------ claim links
+  await page.click('[data-testid="account-menu"]');
   await page.click('[data-testid="lock"]');
   await page.click('[data-testid="unlock"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="refresh"]')?.textContent === "Refresh");
