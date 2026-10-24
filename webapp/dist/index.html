@@ -5,7 +5,11 @@
     <script>
       // Claim links made before the app moved to /app/ still work.
       (function () {
-        if (/(^#|&)claim=/.test(location.hash)) location.replace("/app/" + location.hash);
+        function go() {
+          if (/(^#|&)claim=/.test(location.hash)) location.replace("/app/" + location.hash);
+        }
+        go();
+        addEventListener("hashchange", go);
       })();
       document.documentElement.className = "js";
     </script>
