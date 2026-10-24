@@ -28,7 +28,6 @@ const config = {
   aspUpdateUrl: "/api/asp-update",
   pricesUrl: "/api/prices",
   maxRelayerFees: Object.fromEntries(assets.map((a) => [a.address, a.maxRelayerFeeTokens])),
-  notice: "Early version. Self-audited, not externally audited. Deposits up to about $2,000 each.",
 };
 fs.writeFileSync(path.join(root, "webapp", "config", "robinhood.json"), JSON.stringify(config, null, 2) + "\n");
 console.log(`Wrote webapp/config/robinhood.json (${assets.length} assets, pool ${dep.pool})`);

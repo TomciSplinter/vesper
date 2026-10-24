@@ -158,7 +158,6 @@ async function main() {
       aspUpdateUrl: `http://127.0.0.1:${ASP_PORT}/asp-update`,
       pricesUrl: `http://127.0.0.1:${PRICE_PORT}/prices`,
       maxRelayerFees: Object.fromEntries(tokens.map((a, i) => [a, (5 / STOCKS[i][2]).toFixed(4)])),
-      notice: "Early version. Self-audited, not externally audited. Deposits up to about $2,000 each.",
     })
   );
   execFileSync("node", [path.join(root, "webapp", "build.mjs"), cfgPath], { cwd: root, stdio: "ignore" });

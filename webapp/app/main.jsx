@@ -1202,7 +1202,7 @@ function App() {
           <p>
             {vesper.config.testnet
               ? "Vesper v0.1 on testnet."
-              : "Vesper v0.1. Self-audited, not externally audited. Deposits and withdrawals are public; everything in between stays private."}
+              : "Vesper v0.1. Deposits and withdrawals are public; everything in between stays private."}
           </p>
           <nav>
             <a href="https://github.com/TomciSplinter/vesper/tree/main/audit" target="_blank" rel="noreferrer">

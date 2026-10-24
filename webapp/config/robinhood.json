@@ -92,6 +92,5 @@
     "0x117cc2133c37B721F49dE2A7a74833232B3B4C0C": "0.0066",
     "0xD5f3879160bc7c32ebb4dC785F8a4F505888de68": "0.0071"
   },
-  "notice": "Early version. Self-audited, not externally audited. Deposits up to about $2,000 each.",
   "pricesUrl": "/api/prices"
 }
