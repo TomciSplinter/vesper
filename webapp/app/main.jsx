@@ -349,6 +349,160 @@ function ViewKey({ vesper }) {
   );
 }
 
+function LinkForm({ vesper, data, run }) {
+  const [asset, setAsset] = useState(vesper.assets[0]?.address);
+  const [amount, setAmount] = useState("");
+  const [fee, setFee] = useState(null);
+  const [created, setCreated] = useState(null);
+  const [links, setLinks] = useState(null);
+  const symbol = vesper.asset(asset)?.symbol;
+  const row = data?.byAsset.find((b) => b.asset.address === asset);
+
+  useEffect(() => {
+    let live = true;
+    vesper.relayerFee(asset).then((r) => live && setFee(r ? r.fee : null)).catch(() => live && setFee(null));
+    return () => {
+      live = false;
+    };
+  }, [asset]);
+
+  const loadLinks = useCallback(() => {
+    vesper.myLinks().then(setLinks).catch(() => setLinks([]));
+  }, [vesper]);
+  useEffect(loadLinks, [loadLinks, data]);
+
+  const create = () =>
+    run(async (onStep) => {
+      const r = await vesper.createLink(asset, parseAmount(amount), { useRelayer: true }, onStep);
+      setCreated(r);
+      setAmount("");
+      return r.txHash;
+    });
+
+  const share = async (url) => {
+    try {
+      if (navigator.share) return await navigator.share({ title: "Vesper", text: "Here's some stock for you. Open the link to claim it.", url });
+    } catch {}
+  };
+
+  return (
+    <section className="card" data-testid="form-link">
+      <h2>Send as a link</h2>
+      <p className="muted">Turn stock into a link that works like cash: whoever opens it can claim it, even without a Vesper account or any ETH.</p>
+      <AssetSelect vesper={vesper} value={asset} onChange={setAsset} />
+      <label className="field">
+        <span>
+          Amount they get {row && <em>· available {fmt(row.approved)}</em>}
+        </span>
+        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.0" data-testid="link-amount" />
+        {fee !== null && (
+          <small className="muted">
+            Plus {fmt(fee)} {symbol} for their claim fee and {fmt(fee)} {symbol} to create it, both paid to the relayer.
+          </small>
+        )}
+      </label>
+      <button className="btn primary wide" onClick={create} data-testid="submit-link">
+        Create link
+      </button>
+
+      {created && (
+        <div className="exit-box" data-testid="link-created">
+          <p className="small">
+            <strong>Your link for {fmt(created.amount)} {vesper.asset(created.asset)?.symbol}.</strong> Anyone who has it can claim it, so send it
+            privately, like cash in an envelope.
+          </p>
+          <code className="mono block small" data-testid="link-url">{created.url}</code>
+          <div className="row gap">
+            <Copy text={created.url} label="Copy link" />
+            {typeof navigator !== "undefined" && navigator.share && (
+              <button className="btn ghost small" onClick={() => share(created.url)}>Share</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {links && links.length > 0 && (
+        <div className="links-list">
+          <h3>Your links</h3>
+          {links.map((l) => (
+            <div className="asset" key={l.index} data-testid={`link-${l.index}`}>
+              <div>
+                <div className="sym">{l.claimed ? "Claimed" : `${fmt(l.amount)} ${l.asset?.symbol || ""}`}</div>
+                <div className="muted small">Link #{l.index + 1}</div>
+              </div>
+              {!l.claimed && l.asset && (
+                <div className="row gap">
+                  <Copy text={l.url} label="Copy" />
+                  <button
+                    className="btn ghost small"
+                    data-testid={`reclaim-${l.index}`}
+                    onClick={() => run((st) => vesper.claimLink(l.keypair, l.asset.address, "private", st))}
+                  >
+                    Take back
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ClaimScreen({ vesper, secret, unlocked, onUnlock, run, onClose }) {
+  const [info, setInfo] = useState(null);
+  const [err, setErr] = useState(null);
+  const [to, setTo] = useState("");
+
+  useEffect(() => {
+    vesper.openLink(secret).then(setInfo).catch((e) => setErr(friendly(e)));
+  }, [secret]);
+
+  const item = info?.items?.[0];
+  const claimPrivate = () =>
+    run(async (step) => {
+      if (!unlocked) {
+        step("Sign in with your wallet…");
+        await vesper.unlock();
+        onUnlock();
+      }
+      return vesper.claimLink(info.keypair, item.asset.address, "private", step);
+    }, onClose);
+  const claimTo = () => run((step) => vesper.claimLink(info.keypair, item.asset.address, to.trim(), step), onClose);
+
+  return (
+    <section className="card claim" data-testid="claim-screen">
+      <Logo size={48} />
+      <h2>You've been sent stock</h2>
+      {err && <p className="error" data-testid="claim-error">{err}</p>}
+      {!info && !err && <p className="muted">Opening the link…</p>}
+      {info && !item && <p className="muted" data-testid="claim-empty">This link has already been claimed.</p>}
+      {item && (
+        <>
+          <p className="claim-amount" data-testid="claim-amount">
+            {fmt(item.receive)} <span>{item.asset.symbol}</span>
+          </p>
+          <p className="muted small">{item.asset.name}. Claiming is free for you: the relayer pays the gas.</p>
+          <button className="btn primary wide" onClick={claimPrivate} data-testid="claim-private">
+            Claim to my private Vesper balance
+          </button>
+          <p className="hint">Connect any wallet and sign one free message. Nobody will see it arrive.</p>
+          <div className="or">or</div>
+          <label className="field">
+            <span>Send it to a wallet address</span>
+            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="0x…" data-testid="claim-to" />
+          </label>
+          <button className="btn wide" onClick={claimTo} data-testid="claim-address">
+            Send to this address
+          </button>
+        </>
+      )}
+      <button className="link" onClick={onClose}>Not now</button>
+    </section>
+  );
+}
+
 function Progress({ state, vesper, onClose }) {
   if (!state) return null;
   const link = state.txHash && vesper.explorerTx(state.txHash);
@@ -400,6 +554,16 @@ function App() {
   const [data, setData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [claimSecret, setClaimSecret] = useState(() => {
+    const m = /claim=([^&]+)/.exec(typeof location !== "undefined" ? location.hash : "");
+    return m ? decodeURIComponent(m[1]) : null;
+  });
+  const closeClaim = () => {
+    setClaimSecret(null);
+    try {
+      history.replaceState(null, "", location.pathname + location.search);
+    } catch {}
+  };
   const wide = useWide();
   useEffect(() => {
     if (wide && (tab === "receive" || tab === "viewkey")) setTab("deposit");
@@ -425,11 +589,12 @@ function App() {
     if (unlocked) refresh();
   }, [unlocked, refresh]);
 
-  async function run(action) {
+  async function run(action, onDone) {
     setProgress({ status: "working", step: "Getting ready…" });
     try {
       const txHash = await action((step) => setProgress({ status: "working", step }));
       setProgress({ status: "done", txHash });
+      if (onDone) onDone();
       refresh();
     } catch (e) {
       setProgress({ status: "error", error: friendly(e) });
@@ -444,6 +609,7 @@ function App() {
     : [
         ["deposit", "Deposit"],
         ["send", "Send"],
+        ["link", "Link"],
         ["withdraw", "Withdraw"],
         ...(wide ? [] : [["receive", "Receive"], ["viewkey", "View key"]]),
       ];
@@ -480,7 +646,9 @@ function App() {
       )}
       {unlocked && vesper.accountWarning && <div className="banner warn-banner" data-testid="account-warning">{vesper.accountWarning}</div>}
 
-      {!unlocked ? (
+      {claimSecret ? (
+        <ClaimScreen vesper={vesper} secret={claimSecret} unlocked={unlocked && !vesper.viewOnly} onUnlock={() => setUnlocked(true)} run={run} onClose={closeClaim} />
+      ) : !unlocked ? (
         <Welcome vesper={vesper} onUnlocked={() => setUnlocked(true)} onError={(e) => setProgress({ status: "error", error: friendly(e) })} />
       ) : (
         <main className={wide ? "desk" : ""}>
@@ -508,6 +676,7 @@ function App() {
                   ))}
                 </nav>
                 {["deposit", "send", "withdraw"].includes(tab) && <ActionForm key={tab} vesper={vesper} kind={tab} data={data} run={run} />}
+                {tab === "link" && <LinkForm vesper={vesper} data={data} run={run} />}
                 {!wide && tab === "receive" && <Receive vesper={vesper} />}
                 {!wide && tab === "viewkey" && <ViewKey vesper={vesper} />}
               </div>

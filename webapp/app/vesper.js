@@ -12,6 +12,11 @@ import {
   getRelayerInfo,
   relayTransaction,
   fetchAssociationSet,
+  linkKeypair,
+  encodeLinkSecret,
+  decodeLinkSecret,
+  readLink,
+  scanLinks,
 } from "../../src/index.js";
 
 const POOL_ABI = [
@@ -389,6 +394,104 @@ export class Vesper {
       asp,
     });
     return relayer ? this._sendRelayed(prepared, asset, relayer.url, onStep) : this._sendOwn(prepared, asset, onStep);
+  }
+
+  // -------------------------------------------------------- claim links
+  // A link holds stock like cash: whoever opens it can claim it. The claim always goes
+  // through the relayer (so the person claiming needs no ETH), and its fee is added on top
+  // when the link is made, so the receiver gets the full amount.
+
+  linkUrl(kp) {
+    const base = typeof location !== "undefined" ? `${location.origin}${location.pathname}` : "https://vesper.markets/";
+    return `${base}#claim=${encodeLinkSecret(kp)}`;
+  }
+
+  /** Makes a link worth `amount` of the stock. Returns { url, txHash }. */
+  async createLink(assetAddr, amount, { useRelayer = true } = {}, onStep = () => {}) {
+    this._needSpender();
+    const asset = getAddress(assetAddr);
+    const claim = await this.relayerFee(asset);
+    if (!claim) throw new Error("Links need the relayer, which isn't available for this stock right now.");
+    onStep("Finding a fresh link…");
+    const { nextIndex } = await scanLinks(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 });
+    const kp = linkKeypair(this.keypair, nextIndex);
+    const linkAmount = amount + claim.fee;
+    const asp = await this.associationSet();
+    const { fee, relayer } = await this._feeFor(asset, useRelayer);
+    // The claim pays a relayer fee, so the link must hold approved money.
+    const inputs = await this._pickNotes(asset, linkAmount + fee, { asp, approvedOnly: true });
+    const change = sum(inputs) - linkAmount - fee;
+    onStep("Creating your private proof (this can take a little while)…");
+    const prepared = await this._prepare({
+      asset,
+      inputs,
+      outputs: [new Utxo({ amount: linkAmount, keypair: kp, asset }), new Utxo({ amount: change, keypair: this.keypair, asset })],
+      fee,
+      relayer: relayer ? relayer.relayer : ZeroAddress,
+      asp,
+    });
+    const txHash = relayer ? await this._sendRelayed(prepared, asset, relayer.url, onStep) : await this._sendOwn(prepared, asset, onStep);
+    return { url: this.linkUrl(kp), txHash, amount, asset };
+  }
+
+  /** The links this account made: [{ index, url, asset, amount, claimed }], newest first. */
+  async myLinks() {
+    this._needSpender();
+    const { links } = await scanLinks(this.pool, this.keypair, { fromBlock: this.config.deployBlock || 0 });
+    return links
+      .map((l) => {
+        const notes = l.notes.length ? l.notes : [];
+        return {
+          index: l.index,
+          url: this.linkUrl(l.keypair),
+          keypair: l.keypair,
+          claimed: l.claimed,
+          asset: notes[0] ? this.assets.find((a) => BigInt(a.address) === notes[0].asset) : null,
+          amount: sum(notes),
+        };
+      })
+      .reverse();
+  }
+
+  /** Opens a link (no wallet needed): { keypair, items: [{ asset, amount, fee, receive }] }. */
+  async openLink(secretOrUrl) {
+    const kp = decodeLinkSecret(secretOrUrl);
+    const { notes, claimed } = await readLink(this.pool, kp, { fromBlock: this.config.deployBlock || 0 });
+    const items = [];
+    for (const a of this.assets) {
+      const mine = notes.filter((n) => n.asset === BigInt(a.address));
+      if (!mine.length) continue;
+      const r = await this.relayerFee(a.address).catch(() => null);
+      const fee = r ? r.fee : null;
+      const amount = sum(mine);
+      items.push({ asset: a, amount, fee, receive: fee !== null && amount > fee ? amount - fee : 0n });
+    }
+    return { keypair: kp, items, claimed };
+  }
+
+  /**
+   * Claims a link through the relayer, either into this account's private balance
+   * (to = "private", needs unlock) or out to a 0x wallet address.
+   */
+  async claimLink(linkKp, assetAddr, to, onStep = () => {}) {
+    const asset = getAddress(assetAddr);
+    const { notes } = await readLink(this.pool, linkKp, { fromBlock: this.config.deployBlock || 0 });
+    const mine = notes.filter((n) => n.asset === BigInt(asset)).sort((a, b) => (a.amount < b.amount ? 1 : -1)).slice(0, 2);
+    if (!mine.length) throw new Error("This link has already been claimed.");
+    const { fee, relayer } = await this._feeFor(asset, true);
+    const total = sum(mine);
+    if (total <= fee) throw new Error("This link holds less than the relayer fee.");
+    const asp = await this.associationSet();
+    onStep("Creating the proof (this can take a little while)…");
+    let prepared;
+    if (to === "private") {
+      this._needSpender();
+      prepared = await this._prepare({ asset, inputs: mine, outputs: [new Utxo({ amount: total - fee, keypair: this.keypair, asset })], fee, relayer: relayer.relayer, asp });
+    } else {
+      if (!isAddress(to)) throw new Error("That isn't a valid 0x address.");
+      prepared = await this._prepare({ asset, inputs: mine, recipient: getAddress(to), fee, relayer: relayer.relayer, asp });
+    }
+    return this._sendRelayed(prepared, asset, relayer.url, onStep);
   }
 
   async _feeFor(asset, useRelayer) {

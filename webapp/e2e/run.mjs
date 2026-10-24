@@ -336,6 +336,52 @@ async function main() {
   check(!/wallet \d/.test(await page.textContent('[data-testid="balance-vTSLA"]')), "read-only mode doesn't show the connected wallet's balance");
   await page.screenshot({ path: path.join(shots, "5-viewkey.png") });
 
+  // ------------------------------------------------------------ claim links
+  await page.click('[data-testid="lock"]');
+  await page.click('[data-testid="unlock"]');
+  await page.waitForFunction(() => document.querySelector('[data-testid="refresh"]')?.textContent === "Refresh");
+  await page.click('[data-testid="tab-link"]');
+  await page.fill('[data-testid="link-amount"]', "2");
+  await page.click('[data-testid="submit-link"]');
+  await done("create link");
+  const linkUrl = (await page.textContent('[data-testid="link-url"]')).trim();
+  check(/#claim=vlink1[0-9a-f]{64}$/.test(linkUrl), "creating a link shows a #claim=… URL");
+  check((await privateBalance()) === e(41), "a 2 vTSLA link costs 3 (2 + claim fee + creation fee): balance 41");
+  await page.screenshot({ path: path.join(shots, "8-link.png") });
+
+  // Someone with no wallet and no account opens it and sends it to an address.
+  const guest = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+  guest.setDefaultTimeout(180_000);
+  await guest.goto(linkUrl.replace(/^https?:\/\/[^/]+/, `http://127.0.0.1:${APP_PORT}`));
+  await guest.waitForSelector('[data-testid="claim-amount"]');
+  check(/^2\s*vTSLA$/.test((await guest.textContent('[data-testid="claim-amount"]')).trim()), "the link page shows '2 vTSLA' to the receiver");
+  await guest.screenshot({ path: path.join(shots, "9-claim.png") });
+  const linkTo = ethers.Wallet.createRandom().address;
+  await guest.fill('[data-testid="claim-to"]', linkTo);
+  await guest.click('[data-testid="claim-address"]');
+  await guest.waitForSelector('[data-testid="done"], [data-testid="error"]');
+  if (await guest.$('[data-testid="error"]')) throw new Error("claim failed: " + (await guest.textContent('[data-testid="error"]')));
+  check((await token.balanceOf(linkTo)) === e(2), "a guest without a wallet claimed the link to an address and got exactly 2");
+  await guest.goto(linkUrl.replace(/^https?:\/\/[^/]+/, `http://127.0.0.1:${APP_PORT}`));
+  await guest.reload();
+  await guest.waitForSelector('[data-testid="claim-empty"]');
+  check(true, "opening the link again says it has already been claimed");
+  await guest.close();
+
+  // The sender makes another link and takes it back.
+  await page.click('[data-testid="tab-link"]');
+  await page.fill('[data-testid="link-amount"]', "1");
+  await page.click('[data-testid="submit-link"]');
+  await done("create second link");
+  check((await privateBalance()) === e(39), "second link of 1 made: balance 39");
+  await page.click('[data-testid="tab-deposit"]');
+  await page.click('[data-testid="tab-link"]');
+  await page.waitForSelector('[data-testid="reclaim-1"]');
+  check(/Claimed/.test(await page.textContent('[data-testid="link-0"]')), "'Your links' shows the first link as claimed");
+  await page.click('[data-testid="reclaim-1"]');
+  await done("take back link");
+  check((await privateBalance()) === e(40), "taking back the unclaimed link returns it, minus the relayer fee: 40");
+
   await browser.close();
   appServer.close();
   relayerServer.close();

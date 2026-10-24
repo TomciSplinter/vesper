@@ -7,4 +7,5 @@ module.exports = {
   ...require("./transaction"),
   ...require("./relayerClient"),
   ...require("./asp"),
+  ...require("./claimLinks"),
 };
