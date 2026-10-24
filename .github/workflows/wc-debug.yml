@@ -1,0 +1,14 @@
+name: Debug WalletConnect
+on: workflow_dispatch
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install chromium
+      - run: |
+          node scripts/dev/wc-debug.mjs > log.txt 2>&1 || true
+          grep -v "framereceived" log.txt | head -80 | while IFS= read -r line; do echo "::notice::$line"; done
